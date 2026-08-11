@@ -103,3 +103,10 @@ storybook-static
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# AI agent artifacts
+redisinsight/.superpowers/
+redisinsight/docs/superpowers/
+redisinsight/docs/agent-plans/
+redisinsight/docs/research/
+redisinsight/docs/specs/
