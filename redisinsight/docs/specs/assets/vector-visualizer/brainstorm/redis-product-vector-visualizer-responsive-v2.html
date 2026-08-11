@@ -1,0 +1,50 @@
+<div id="redis-product-vector-mount" aria-live="polite">Loading RedisInsight mockup…</div>
+
+<script>
+  (async function () {
+    document.documentElement.style.fontSize = '62.5%';
+    const response = await fetch('/files/redis-product-vector-visualizer.html');
+    const source = await response.text();
+    const template = document.createElement('template');
+    template.innerHTML = source;
+    const scripts = Array.from(template.content.querySelectorAll('script'));
+    scripts.forEach((script) => script.remove());
+    document.getElementById('redis-product-vector-mount').replaceWith(template.content);
+
+    const responsive = document.createElement('style');
+    responsive.textContent = `
+      @media (max-width:1000px) {
+        .ri-mockup { min-height:62rem; height:calc(100vh - 15rem); }
+        .ri-layout { grid-template-columns:5.6rem minmax(0,1fr); }
+        .ri-sidebar { padding:.6rem; }
+        .ri-side-group { display:none; }
+        .ri-nav-item { width:4.4rem; justify-content:center; padding:0; font-size:0; }
+        .ri-nav-item .ri-icon { font-size:1.3rem; }
+        .ri-brand { min-width:4.4rem; width:4.4rem; }
+        .ri-brand > span:last-child { display:none; }
+        .ri-db-switcher { border-left:0; }
+        .ri-main { padding:.8rem; }
+        .ri-workspace { grid-template-columns:18rem minmax(25rem,1fr) 24rem; }
+        .ri-controls { padding:.8rem; }
+        .ri-tab { padding:0 .7rem; font-size:1.1rem; }
+        .ri-chart-head { padding:.6rem .8rem; }
+        .ri-chart-actions { display:none; }
+        .ri-inspector-head,.ri-table-tools { padding:.8rem; }
+        .ri-table-header,.ri-table-row { grid-template-columns:1.8rem minmax(7rem,1fr) 5.4rem 1.8rem; }
+        .ri-banner { font-size:1.1rem; }
+      }
+      @media (max-width:760px) {
+        .ri-workspace { grid-template-columns:16rem minmax(24rem,1fr); }
+        .ri-inspector { display:none; }
+        .ri-app-actions { display:none; }
+      }
+    `;
+    document.head.appendChild(responsive);
+
+    scripts.forEach((oldScript) => {
+      const script = document.createElement('script');
+      script.textContent = oldScript.textContent;
+      document.body.appendChild(script);
+    });
+  })();
+</script>

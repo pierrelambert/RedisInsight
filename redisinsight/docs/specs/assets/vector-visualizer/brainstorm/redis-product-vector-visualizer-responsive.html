@@ -1,0 +1,54 @@
+<style>
+  .responsive-preview-shell {
+    width:100%; height:calc(100vh - 7.2rem); min-height:72rem; overflow:hidden;
+    border:0; border-radius:.8rem; background:#f4f6f7;
+  }
+  .responsive-preview-frame { width:100%; height:100%; border:0; display:block; }
+</style>
+
+<div class="responsive-preview-shell">
+  <iframe
+    id="redis-product-vector-frame"
+    class="responsive-preview-frame"
+    title="RedisInsight vector visualizer product mockup"
+    src="/files/redis-product-vector-visualizer.html"
+  ></iframe>
+</div>
+
+<script>
+  document.getElementById('redis-product-vector-frame').addEventListener('load', function () {
+    const doc = this.contentDocument;
+    const responsive = doc.createElement('style');
+    responsive.textContent = `
+      html { font-size:62.5%; }
+      body { margin:0; padding:1.2rem; background:#f4f6f7; }
+      .ri-review-bar { position:sticky; top:0; z-index:20; }
+      @media (max-width:1000px) {
+        .ri-mockup { min-height:62rem; height:calc(100vh - 8.4rem); }
+        .ri-layout { grid-template-columns:5.6rem minmax(0,1fr); }
+        .ri-sidebar { padding:.6rem; }
+        .ri-side-group { display:none; }
+        .ri-nav-item { width:4.4rem; justify-content:center; padding:0; font-size:0; }
+        .ri-nav-item .ri-icon { font-size:1.3rem; }
+        .ri-brand { min-width:4.4rem; width:4.4rem; }
+        .ri-brand > span:last-child { display:none; }
+        .ri-db-switcher { border-left:0; }
+        .ri-main { padding:.8rem; }
+        .ri-workspace { grid-template-columns:18rem minmax(25rem,1fr) 24rem; }
+        .ri-controls { padding:.8rem; }
+        .ri-tab { padding:0 .7rem; font-size:1.1rem; }
+        .ri-chart-head { padding:.6rem .8rem; }
+        .ri-chart-actions { display:none; }
+        .ri-inspector-head,.ri-table-tools { padding:.8rem; }
+        .ri-table-header,.ri-table-row { grid-template-columns:1.8rem minmax(7rem,1fr) 5.4rem 1.8rem; }
+        .ri-banner { font-size:1.1rem; }
+      }
+      @media (max-width:760px) {
+        .ri-workspace { grid-template-columns:16rem minmax(24rem,1fr); }
+        .ri-inspector { display:none; }
+        .ri-app-actions { display:none; }
+      }
+    `;
+    doc.head.appendChild(responsive);
+  });
+</script>

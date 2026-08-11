@@ -1,0 +1,320 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Source+Code+Pro:wght@400;600&display=swap');
+
+  .ri-review-bar {
+    display:flex; align-items:center; justify-content:space-between; gap:1.2rem;
+    margin:0 0 1.2rem; padding:1rem 1.2rem; border:1px solid #d9dde3;
+    border-radius:.8rem; background:#fff; color:#263238; font-family:'Geist',sans-serif;
+  }
+  .ri-review-bar strong { font-size:1.3rem; }
+  .ri-review-controls { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; }
+  .ri-review-label { font-size:1.1rem; color:#667085; }
+  .ri-review-btn {
+    border:1px solid #b9c2c6; background:#f9fafa; color:#163341; border-radius:.4rem;
+    min-height:2.8rem; padding:0 .8rem; font:500 1.1rem 'Geist',sans-serif; cursor:pointer;
+  }
+  .ri-review-btn:hover { background:#e8ebec; }
+  .ri-review-btn:focus-visible { outline:2px solid #006e9b; outline-offset:2px; }
+  .ri-review-btn.is-active { background:#d0f1ff; border-color:#006e9b; color:#061457; }
+
+  .ri-mockup {
+    --bg:#121212; --surface:#1a1a1a; --surface-raised:#202020; --surface-hover:#2e2e2e;
+    --surface-selected:#002f47; --border:#3a3a3a; --border-strong:#4a4a4a;
+    --text:#f6f6f6; --text-subtle:#cacaca; --text-muted:#9b9b9b;
+    --primary:#80dbff; --primary-strong:#40a5cd; --primary-bg:#002f47;
+    --informative:#80dbff; --informative-bg:#002f47; --success:#8cd7b9; --success-bg:#12281f;
+    --notice:#c8b5f2; --notice-bg:#2f1c59; --attention:#e7c05a; --attention-bg:#3c2a14;
+    --danger:#e68a8a; --danger-bg:#4a2a2a; --brand:#ff4438;
+    --shadow:0 .8rem 2.4rem rgba(0,0,0,.28);
+    width:100%; height:min(78vh,82rem); min-height:66rem; overflow:hidden; border-radius:.8rem;
+    border:1px solid var(--border); background:var(--bg); color:var(--text);
+    font-family:'Geist','Geist Sans',sans-serif; font-size:1.2rem; box-shadow:var(--shadow);
+  }
+  .ri-mockup[data-theme='light'] {
+    --bg:#f4f6f7; --surface:#ffffff; --surface-raised:#fafbfb; --surface-hover:#eaedf2;
+    --surface-selected:#d0f1ff; --border:#c1cbd9; --border-strong:#8094b1;
+    --text:#01112a; --text-subtle:#4d6992; --text-muted:#8094b1;
+    --primary:#006e9b; --primary-strong:#00587d; --primary-bg:#d0f1ff;
+    --informative:#006e9b; --informative-bg:#f2fbff; --success:#3a8365; --success-bg:#eff9f5;
+    --notice:#7547de; --notice-bg:#f1edfc; --attention:#a06c18; --attention-bg:#fff7ea;
+    --danger:#b02c30; --danger-bg:#fcebec; --brand:#ff4438;
+    --shadow:0 .8rem 2.4rem rgba(1,17,42,.12);
+  }
+  .ri-mockup * { box-sizing:border-box; }
+  .ri-mockup button,.ri-mockup input,.ri-mockup select { font:inherit; }
+  .ri-code { font-family:'Source Code Pro',monospace; font-variant-numeric:tabular-nums; }
+  .ri-icon { width:1.6rem; height:1.6rem; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .ri-appbar {
+    height:4.8rem; display:flex; align-items:center; border-bottom:1px solid var(--border);
+    background:var(--surface); padding:0 1.2rem; gap:1.2rem;
+  }
+  .ri-brand { display:flex; align-items:center; gap:.8rem; font-weight:600; font-size:1.3rem; min-width:18.8rem; }
+  .ri-brand-mark { width:2.2rem; height:2.2rem; border-radius:.5rem; background:var(--brand); color:#fff; display:grid; place-items:center; font-weight:600; }
+  .ri-db-switcher { display:flex; align-items:center; gap:.8rem; min-width:0; padding:0 .8rem; height:3.2rem; border-left:1px solid var(--border); }
+  .ri-db-name { max-width:26rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+  .ri-db-meta { color:var(--text-muted); font-size:1rem; }
+  .ri-app-actions { margin-left:auto; display:flex; gap:.4rem; }
+  .ri-icon-btn {
+    width:3rem; height:3rem; border:1px solid transparent; border-radius:.4rem; background:transparent;
+    color:var(--text-subtle); cursor:pointer; display:grid; place-items:center;
+  }
+  .ri-icon-btn:hover { background:var(--surface-hover); color:var(--text); }
+  .ri-icon-btn:focus-visible,.ri-btn:focus-visible,.ri-tab:focus-visible,.ri-input:focus-visible,.ri-select:focus-visible,.ri-table-row:focus-visible {
+    outline:2px solid var(--primary); outline-offset:2px;
+  }
+  .ri-layout { height:calc(100% - 4.8rem); display:grid; grid-template-columns:20rem minmax(0,1fr); }
+  .ri-sidebar { border-right:1px solid var(--border); background:var(--surface); padding:.8rem; display:flex; flex-direction:column; min-height:0; }
+  .ri-side-group { padding:.8rem .8rem .4rem; font-size:1rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
+  .ri-nav-item { height:3.6rem; border:0; background:transparent; color:var(--text-subtle); border-radius:.4rem; display:flex; align-items:center; gap:.8rem; padding:0 .8rem; cursor:pointer; text-align:left; }
+  .ri-nav-item:hover { background:var(--surface-hover); color:var(--text); }
+  .ri-nav-item.is-active { background:var(--primary-bg); color:var(--primary); font-weight:500; }
+  .ri-nav-spacer { flex:1; }
+  .ri-main { min-width:0; min-height:0; display:flex; flex-direction:column; padding:.8rem 1.6rem 1.6rem; gap:.8rem; }
+  .ri-page-header { min-height:4.4rem; display:flex; align-items:center; justify-content:space-between; gap:1.2rem; }
+  .ri-breadcrumb { display:flex; align-items:center; gap:.6rem; min-width:0; }
+  .ri-back { color:var(--primary); font-weight:500; }
+  .ri-separator { color:var(--text-muted); }
+  .ri-index-select { display:flex; align-items:center; gap:.6rem; font-weight:600; font-size:1.5rem; min-width:0; }
+  .ri-index-select span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ri-header-actions { display:flex; gap:.8rem; }
+  .ri-btn { height:3rem; border-radius:.4rem; padding:0 1rem; border:1px solid var(--border-strong); background:var(--surface); color:var(--text); cursor:pointer; font-weight:500; display:inline-flex; align-items:center; justify-content:center; gap:.6rem; }
+  .ri-btn:hover { background:var(--surface-hover); }
+  .ri-btn.primary { background:var(--primary-bg); border-color:var(--primary-strong); color:var(--primary); }
+  .ri-btn:disabled { opacity:.45; cursor:not-allowed; }
+  .ri-banner { min-height:3.8rem; display:flex; align-items:center; gap:.8rem; border:1px solid var(--primary-strong); background:var(--informative-bg); color:var(--text); border-radius:.4rem; padding:.8rem 1.2rem; }
+  .ri-banner strong { color:var(--informative); font-weight:600; }
+  .ri-banner .ri-banner-action { margin-left:auto; color:var(--informative); }
+  .ri-workspace { flex:1; min-height:0; display:grid; grid-template-columns:24rem minmax(34rem,1fr) 32rem; border:1px solid var(--border); border-radius:.6rem; overflow:hidden; background:var(--surface); }
+  .ri-controls { min-width:0; border-right:1px solid var(--border); background:var(--surface-raised); overflow:auto; padding:1.2rem; }
+  .ri-panel-title { margin:0 0 1.2rem; font-size:1.3rem; font-weight:600; }
+  .ri-field { margin-bottom:1.2rem; }
+  .ri-label { display:flex; align-items:center; justify-content:space-between; margin:0 0 .4rem; color:var(--text-subtle); font-size:1.1rem; font-weight:500; }
+  .ri-select,.ri-input { width:100%; height:3.2rem; border:1px solid var(--border-strong); border-radius:.4rem; background:var(--surface); color:var(--text); padding:0 .8rem; }
+  .ri-select:hover,.ri-input:hover { border-color:var(--primary-strong); }
+  .ri-input::placeholder { color:var(--text-muted); }
+  .ri-search-wrap { position:relative; }
+  .ri-search-wrap .ri-input { padding-left:2.8rem; }
+  .ri-search-icon { position:absolute; left:.8rem; top:.8rem; color:var(--text-muted); }
+  .ri-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem; }
+  .ri-chip { display:inline-flex; align-items:center; min-width:0; max-width:100%; gap:.4rem; height:2.4rem; padding:0 .6rem; border-radius:1.2rem; background:var(--notice-bg); color:var(--notice); border:1px solid color-mix(in srgb,var(--notice) 45%,transparent); }
+  .ri-chip-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ri-segment { display:grid; grid-template-columns:repeat(2,1fr); border:1px solid var(--border-strong); border-radius:.4rem; overflow:hidden; }
+  .ri-segment button { height:3rem; border:0; border-right:1px solid var(--border-strong); background:var(--surface); color:var(--text-subtle); cursor:pointer; }
+  .ri-segment button:last-child { border-right:0; }
+  .ri-segment button.active { background:var(--primary-bg); color:var(--primary); font-weight:600; }
+  .ri-switch-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:.8rem 0; color:var(--text-subtle); }
+  .ri-switch { width:3rem; height:1.8rem; border:0; padding:.2rem; border-radius:1rem; background:var(--primary-strong); cursor:pointer; display:flex; justify-content:flex-end; }
+  .ri-switch:after { content:''; width:1.4rem; height:1.4rem; border-radius:50%; background:#fff; }
+  .ri-sample-summary { margin-top:1.2rem; padding:.8rem; border-radius:.4rem; background:var(--surface); border:1px solid var(--border); }
+  .ri-sample-summary strong { display:block; margin-bottom:.3rem; }
+  .ri-sample-summary span { color:var(--text-muted); font-size:1rem; }
+  .ri-viz { min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); }
+  .ri-tabs { height:4rem; display:flex; align-items:flex-end; gap:.4rem; padding:0 1.2rem; border-bottom:1px solid var(--border); background:var(--surface); }
+  .ri-tab { height:4rem; padding:0 1.2rem; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-subtle); cursor:pointer; font-weight:500; }
+  .ri-tab:hover { color:var(--text); background:var(--surface-hover); }
+  .ri-tab.is-active { color:var(--primary); border-bottom-color:var(--primary); }
+  .ri-count { display:inline-grid; place-items:center; min-width:1.8rem; height:1.8rem; padding:0 .4rem; border-radius:.9rem; background:var(--surface-hover); font-size:1rem; margin-left:.4rem; }
+  .ri-chart-head { min-height:4.4rem; display:flex; align-items:center; gap:.8rem; padding:.8rem 1.2rem; border-bottom:1px solid var(--border); }
+  .ri-chart-title { min-width:0; }
+  .ri-chart-title strong { display:block; font-weight:600; }
+  .ri-chart-title span { color:var(--text-muted); font-size:1rem; }
+  .ri-chart-actions { margin-left:auto; display:flex; gap:.4rem; }
+  .ri-status-badge { display:inline-flex; align-items:center; gap:.4rem; height:2.2rem; padding:0 .6rem; border-radius:1.1rem; background:var(--success-bg); color:var(--success); font-size:1rem; white-space:nowrap; }
+  .ri-status-badge:before { content:'●'; font-size:.8rem; }
+  .ri-chart { position:relative; flex:1; min-height:0; overflow:hidden; background:radial-gradient(circle at 50% 47%,var(--surface-raised),var(--bg) 72%); }
+  .ri-view { position:absolute; inset:0; display:none; }
+  .ri-view.is-active { display:block; }
+  .ri-axis-x,.ri-axis-y { position:absolute; color:var(--text-muted); font-size:1rem; }
+  .ri-axis-x { left:50%; bottom:.8rem; transform:translateX(-50%); }
+  .ri-axis-y { left:.6rem; top:50%; transform:translateY(-50%) rotate(-90deg); }
+  .ri-dot { position:absolute; width:.7rem; height:.7rem; margin:-.35rem 0 0 -.35rem; border-radius:50%; border:0; background:var(--primary); box-shadow:0 0 .6rem color-mix(in srgb,var(--primary) 65%,transparent); cursor:pointer; }
+  .ri-dot:hover,.ri-dot:focus-visible { width:1.2rem; height:1.2rem; margin:-.6rem 0 0 -.6rem; outline:2px solid var(--text); outline-offset:2px; z-index:4; }
+  .ri-dot.cat-product { background:var(--notice); }
+  .ri-dot.cat-engineering { background:var(--success); }
+  .ri-dot.cat-support { background:var(--attention); }
+  .ri-cluster-label { position:absolute; transform:translate(-50%,-50%); border:1px solid var(--border); background:color-mix(in srgb,var(--surface) 90%,transparent); color:var(--text-subtle); border-radius:.4rem; padding:.3rem .6rem; font-size:1rem; pointer-events:none; white-space:nowrap; }
+  .ri-tooltip { display:none; position:absolute; z-index:6; width:18rem; border:1px solid var(--border-strong); background:var(--surface); color:var(--text); border-radius:.4rem; padding:.8rem; box-shadow:var(--shadow); pointer-events:none; }
+  .ri-tooltip strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ri-tooltip span { display:block; color:var(--text-subtle); margin-top:.3rem; }
+  .ri-dot:hover + .ri-tooltip,.ri-dot:focus-visible + .ri-tooltip { display:block; }
+  .ri-ring { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border:1px dashed var(--border-strong); border-radius:50%; }
+  .ri-ring-label { position:absolute; left:50%; transform:translateX(.6rem); color:var(--text-muted); font:1rem 'Source Code Pro',monospace; }
+  .ri-anchor { position:absolute; left:50%; top:50%; width:1.8rem; height:1.8rem; margin:-.9rem 0 0 -.9rem; border:3px solid var(--surface); border-radius:50%; background:var(--notice); box-shadow:0 0 0 .6rem color-mix(in srgb,var(--notice) 22%,transparent); z-index:3; }
+  .ri-angle-note { position:absolute; left:1.2rem; bottom:1.2rem; display:flex; align-items:center; gap:.6rem; padding:.6rem .8rem; border:1px solid var(--border); border-radius:.4rem; background:color-mix(in srgb,var(--surface) 92%,transparent); color:var(--text-subtle); font-size:1rem; }
+  .ri-select-rect { position:absolute; left:32%; top:28%; width:28%; height:32%; border:1px solid var(--primary); background:color-mix(in srgb,var(--primary) 12%,transparent); }
+  .ri-inspector { min-width:0; border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; }
+  .ri-inspector-head { padding:1.2rem; border-bottom:1px solid var(--border); }
+  .ri-inspector-headline { display:flex; align-items:start; gap:.8rem; }
+  .ri-inspector-head h3 { margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1.3rem; }
+  .ri-inspector-head p { margin:.4rem 0 0; color:var(--text-muted); font-size:1rem; }
+  .ri-table-tools { padding:.8rem; display:flex; gap:.4rem; border-bottom:1px solid var(--border); }
+  .ri-table-tools .ri-search-wrap { flex:1; }
+  .ri-table { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .ri-table-header,.ri-table-row { display:grid; grid-template-columns:2.4rem minmax(9rem,1fr) 6rem 3rem; align-items:center; gap:.4rem; }
+  .ri-table-header { min-height:3.2rem; padding:0 .8rem; border-bottom:1px solid var(--border); color:var(--text-muted); font-size:1rem; font-weight:600; }
+  .ri-table-body { flex:1; min-height:0; overflow:auto; }
+  .ri-table-row { width:100%; min-height:3.8rem; border:0; border-bottom:1px solid var(--border); background:transparent; color:var(--text); padding:0 .8rem; text-align:left; cursor:pointer; }
+  .ri-table-row:hover { background:var(--surface-hover); }
+  .ri-table-row.is-selected { background:var(--surface-selected); }
+  .ri-table-row .doc-id { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ri-table-row .score { text-align:right; }
+  .ri-swatch { width:.8rem; height:.8rem; border-radius:50%; background:var(--primary); }
+  .ri-table-footer { height:3.2rem; display:flex; align-items:center; justify-content:space-between; padding:0 .8rem; border-top:1px solid var(--border); color:var(--text-muted); font-size:1rem; }
+  .ri-state-layer { display:none; position:absolute; inset:0; z-index:8; background:var(--bg); align-items:center; justify-content:center; text-align:center; padding:3.2rem; }
+  .ri-state-card { max-width:34rem; }
+  .ri-state-icon { width:4rem; height:4rem; margin:0 auto 1.2rem; border-radius:50%; display:grid; place-items:center; background:var(--informative-bg); color:var(--informative); font-size:1.8rem; }
+  .ri-state-card h3 { margin:0 0 .6rem; font-size:1.5rem; }
+  .ri-state-card p { margin:0 0 1.2rem; color:var(--text-subtle); line-height:1.5; }
+  .ri-spinner { width:2.8rem; height:2.8rem; border:.3rem solid var(--border); border-top-color:var(--primary); border-radius:50%; margin:0 auto 1.2rem; animation:ri-spin .8s linear infinite; }
+  .ri-progress { height:.4rem; background:var(--border); border-radius:.2rem; overflow:hidden; margin:1rem 0 .6rem; }
+  .ri-progress span { display:block; width:62%; height:100%; background:var(--primary); }
+  .ri-state-error .ri-state-icon { background:var(--danger-bg); color:var(--danger); }
+  .ri-mockup[data-state='loading'] .ri-state-loading,.ri-mockup[data-state='empty'] .ri-state-empty,.ri-mockup[data-state='error'] .ri-state-error { display:flex; }
+  .ri-legend { position:absolute; right:1.2rem; bottom:1.2rem; display:flex; gap:.8rem; flex-wrap:wrap; padding:.6rem .8rem; border:1px solid var(--border); border-radius:.4rem; background:color-mix(in srgb,var(--surface) 92%,transparent); color:var(--text-subtle); font-size:1rem; }
+  .ri-legend span { display:flex; align-items:center; gap:.4rem; }
+  .ri-legend i { width:.7rem; height:.7rem; border-radius:50%; }
+  @keyframes ri-spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { .ri-spinner { animation:none; border-top-color:var(--border); } }
+  @media (max-width:1100px) { .ri-workspace { grid-template-columns:21rem minmax(32rem,1fr) 27rem; } .ri-layout { grid-template-columns:16rem minmax(0,1fr); } .ri-brand { min-width:14.8rem; } }
+</style>
+
+<div class="ri-review-bar">
+  <strong>RedisInsight vector visualizer mockup</strong>
+  <div class="ri-review-controls" aria-label="Mockup preview controls">
+    <span class="ri-review-label">Theme</span>
+    <button class="ri-review-btn is-active" id="ri-dark-btn" onclick="riSetTheme('dark')">Dark</button>
+    <button class="ri-review-btn" id="ri-light-btn" onclick="riSetTheme('light')">Light</button>
+    <span class="ri-review-label" style="margin-left:.8rem">State</span>
+    <button class="ri-review-btn is-active" data-preview-state="ready" onclick="riSetState('ready',this)">Ready</button>
+    <button class="ri-review-btn" data-preview-state="loading" onclick="riSetState('loading',this)">Loading</button>
+    <button class="ri-review-btn" data-preview-state="empty" onclick="riSetState('empty',this)">Empty</button>
+    <button class="ri-review-btn" data-preview-state="error" onclick="riSetState('error',this)">Error</button>
+  </div>
+</div>
+
+<section class="ri-mockup" id="ri-vector-mockup" data-theme="dark" data-state="ready" aria-label="RedisInsight vector visualizer">
+  <header class="ri-appbar">
+    <div class="ri-brand"><span class="ri-brand-mark">R</span><span>Redis Insight</span></div>
+    <div class="ri-db-switcher"><span class="ri-icon">◆</span><div><div class="ri-db-name">knowledge-production</div><div class="ri-db-meta">localhost:6379 · db 0</div></div><span>⌄</span></div>
+    <div class="ri-app-actions"><button class="ri-icon-btn" aria-label="Notifications">♢</button><button class="ri-icon-btn" aria-label="Help">?</button><button class="ri-icon-btn" aria-label="Settings">⚙</button></div>
+  </header>
+  <div class="ri-layout">
+    <nav class="ri-sidebar" aria-label="Primary navigation">
+      <div class="ri-side-group">Database</div>
+      <button class="ri-nav-item"><span class="ri-icon">▦</span>Browser</button>
+      <button class="ri-nav-item is-active"><span class="ri-icon">⌕</span>Search</button>
+      <button class="ri-nav-item"><span class="ri-icon">›_</span>Workbench</button>
+      <button class="ri-nav-item"><span class="ri-icon">⌁</span>Pub/Sub</button>
+      <div class="ri-side-group">Analyze</div>
+      <button class="ri-nav-item"><span class="ri-icon">⌁</span>Slow Log</button>
+      <button class="ri-nav-item"><span class="ri-icon">▥</span>Database analysis</button>
+      <div class="ri-nav-spacer"></div>
+      <button class="ri-nav-item"><span class="ri-icon">?</span>Help</button>
+    </nav>
+
+    <main class="ri-main">
+      <div class="ri-page-header">
+        <div class="ri-breadcrumb"><span class="ri-back">‹ Indexes</span><span class="ri-separator">/</span><div class="ri-index-select"><span class="ri-code">idx:knowledge-base</span><span>⌄</span></div></div>
+        <div class="ri-header-actions"><button class="ri-btn">View index</button><button class="ri-btn primary">Refresh sample</button></div>
+      </div>
+      <div class="ri-banner" role="status"><span class="ri-icon">ⓘ</span><div><strong>2D projection of a sample.</strong> Position shows approximate neighborhood structure; verify similarity in Neighbors.</div><button class="ri-icon-btn ri-banner-action" aria-label="Dismiss message">×</button></div>
+
+      <div class="ri-workspace">
+        <aside class="ri-controls">
+          <h2 class="ri-panel-title">Visualize index</h2>
+          <div class="ri-field"><label class="ri-label" for="ri-vector-field">Vector field</label><select id="ri-vector-field" class="ri-select ri-code"><option>$.embedding</option><option>$.title_embedding</option></select></div>
+          <div class="ri-field"><label class="ri-label" for="ri-filter">Filter <span>Redis query syntax</span></label><div class="ri-search-wrap"><span class="ri-search-icon">⌕</span><input id="ri-filter" class="ri-input ri-code" value="@language:{en}" aria-label="Filter indexed documents"></div><div class="ri-chips"><span class="ri-chip"><span class="ri-chip-text ri-code">language: en</span><span>×</span></span><span class="ri-chip"><span class="ri-chip-text">Published</span><span>×</span></span></div></div>
+          <div class="ri-field"><label class="ri-label" for="ri-color">Color by</label><select id="ri-color" class="ri-select"><option>Document type</option><option>Language</option><option>Source</option><option>None</option></select></div>
+          <div class="ri-field"><label class="ri-label">Projection</label><div class="ri-segment" role="group" aria-label="Projection algorithm"><button class="active">UMAP</button><button>PCA</button></div></div>
+          <div class="ri-field"><label class="ri-label" for="ri-sample">Sample size <span class="ri-code">20,000</span></label><input id="ri-sample" type="range" min="1000" max="50000" value="20000" style="width:100%;accent-color:var(--primary)"></div>
+          <div class="ri-switch-row"><span>Show cluster labels</span><button class="ri-switch" aria-label="Show cluster labels" aria-pressed="true"></button></div>
+          <div class="ri-switch-row"><span>Include outliers</span><button class="ri-switch" aria-label="Include outliers" aria-pressed="true"></button></div>
+          <div class="ri-sample-summary"><strong class="ri-code">20,000 / 1,926,384</strong><span>Deterministic ID sample · UMAP seed 42 · generated 12s ago</span></div>
+        </aside>
+
+        <section class="ri-viz" aria-label="Vector projection">
+          <div class="ri-tabs" role="tablist">
+            <button class="ri-tab is-active" role="tab" aria-selected="true" data-tab="atlas" onclick="riSetTab('atlas',this)">Atlas</button>
+            <button class="ri-tab" role="tab" aria-selected="false" data-tab="neighbors" onclick="riSetTab('neighbors',this)">Neighbors</button>
+            <button class="ri-tab" role="tab" aria-selected="false" data-tab="selection" onclick="riSetTab('selection',this)">Selection <span class="ri-count">12</span></button>
+          </div>
+          <div class="ri-chart-head"><div class="ri-chart-title"><strong id="ri-chart-heading">Index atlas</strong><span id="ri-chart-subtitle">UMAP · cosine metric · 20,000 sampled documents</span></div><span class="ri-status-badge">Sampled · fresh</span><div class="ri-chart-actions"><button class="ri-icon-btn" aria-label="Fit visualization">⛶</button><button class="ri-icon-btn" aria-label="Visualization options">•••</button></div></div>
+          <div class="ri-chart" id="ri-chart">
+            <div class="ri-view is-active" data-view="atlas" id="ri-atlas-view"><span class="ri-axis-x">UMAP 1 · derived coordinate</span><span class="ri-axis-y">UMAP 2 · derived coordinate</span><span class="ri-cluster-label" style="left:24%;top:26%">Documentation</span><span class="ri-cluster-label" style="left:69%;top:25%">Product</span><span class="ri-cluster-label" style="left:52%;top:72%">Engineering</span><span class="ri-cluster-label" style="left:23%;top:70%">Support</span></div>
+            <div class="ri-view" data-view="neighbors" id="ri-neighbors-view"><div class="ri-ring" style="width:12rem;height:12rem"></div><div class="ri-ring" style="width:24rem;height:24rem"></div><div class="ri-ring" style="width:36rem;height:36rem"></div><span class="ri-ring-label" style="top:calc(50% - 6rem)">0.9</span><span class="ri-ring-label" style="top:calc(50% - 12rem)">0.7</span><span class="ri-ring-label" style="top:calc(50% - 18rem)">0.5</span><button class="ri-anchor" aria-label="Anchor document doc:1842"></button><div class="ri-angle-note"><span>ⓘ</span>Radius = exact cosine similarity · angle = layout only</div></div>
+            <div class="ri-view" data-view="selection" id="ri-selection-view"><span class="ri-axis-x">UMAP 1 · derived coordinate</span><span class="ri-axis-y">UMAP 2 · derived coordinate</span><div class="ri-select-rect"></div><div class="ri-angle-note"><span>⇧</span>Shift-drag selects points from the displayed sample</div></div>
+            <div class="ri-legend"><span><i style="background:var(--primary)"></i>Docs</span><span><i style="background:var(--notice)"></i>Product</span><span><i style="background:var(--success)"></i>Engineering</span><span><i style="background:var(--attention)"></i>Support</span></div>
+            <div class="ri-state-layer ri-state-loading" role="status" aria-live="polite"><div class="ri-state-card"><div class="ri-spinner"></div><h3>Building index map</h3><p>Fetched 20,000 document IDs. Computing the sparse neighborhood graph in a worker.</p><div class="ri-progress"><span></span></div><span class="ri-code" style="color:var(--text-muted)">62% · 12,414 / 20,000</span></div></div>
+            <div class="ri-state-layer ri-state-empty"><div class="ri-state-card"><div class="ri-state-icon">⌕</div><h3>No indexed documents match</h3><p>Remove a filter or choose another vector field to build this visualization.</p><button class="ri-btn primary" onclick="riSetState('ready',document.querySelector('[data-preview-state=ready]'))">Clear filters</button></div></div>
+            <div class="ri-state-layer ri-state-error" role="alert"><div class="ri-state-card"><div class="ri-state-icon">!</div><h3>Couldn’t build the visualization</h3><p>The index changed while RedisInsight was sampling documents. Existing results may be stale.</p><button class="ri-btn" onclick="riSetState('loading',document.querySelector('[data-preview-state=loading]'))">Retry sample</button></div></div>
+          </div>
+        </section>
+
+        <aside class="ri-inspector" aria-label="Document inspector">
+          <div class="ri-inspector-head"><div class="ri-inspector-headline"><div style="min-width:0"><h3 id="ri-inspector-title" class="ri-code">Nearest documents</h3><p id="ri-inspector-subtitle">Whole-index query · filter applied · 8 ms</p></div><button class="ri-icon-btn" aria-label="Close inspector">×</button></div></div>
+          <div class="ri-table-tools"><div class="ri-search-wrap"><span class="ri-search-icon">⌕</span><input class="ri-input" placeholder="Search results" aria-label="Search visualizer results"></div><button class="ri-icon-btn" aria-label="Copy document IDs">⧉</button><button class="ri-icon-btn" aria-label="Export results">⇩</button></div>
+          <div class="ri-table"><div class="ri-table-header"><span></span><span>Document ID ↕</span><span style="text-align:right">Similarity ↓</span><span></span></div><div class="ri-table-body" id="ri-table-body"></div><div class="ri-table-footer"><span id="ri-result-count">50 nearest · virtualized</span><span class="ri-status-badge">Live query</span></div></div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</section>
+
+<script>
+  (function () {
+    const atlas = document.getElementById('ri-atlas-view');
+    const selection = document.getElementById('ri-selection-view');
+    const neighbors = document.getElementById('ri-neighbors-view');
+    const classes = ['cat-docs','cat-product','cat-engineering','cat-support'];
+    const clusters = [
+      {cx:24,cy:28,sx:12,sy:12,cls:'cat-docs'},
+      {cx:69,cy:27,sx:13,sy:11,cls:'cat-product'},
+      {cx:53,cy:70,sx:15,sy:12,cls:'cat-engineering'},
+      {cx:23,cy:70,sx:10,sy:10,cls:'cat-support'}
+    ];
+    function seeded(i, salt) { const x=Math.sin(i*9283.31+salt*77.17)*43758.5453; return x-Math.floor(x); }
+    for (let i=0;i<120;i++) {
+      const c=clusters[i%clusters.length]; const a=seeded(i,1)*Math.PI*2; const r=Math.sqrt(seeded(i,2));
+      const x=Math.max(5,Math.min(95,c.cx+Math.cos(a)*r*c.sx)); const y=Math.max(8,Math.min(92,c.cy+Math.sin(a)*r*c.sy));
+      [atlas,selection].forEach((view,viewIndex)=>{
+        const dot=document.createElement('button'); dot.className='ri-dot '+c.cls; dot.style.left=x+'%'; dot.style.top=y+'%'; dot.setAttribute('aria-label','Document doc:'+(1000+i));
+        const tip=document.createElement('span'); tip.className='ri-tooltip'; tip.style.left=Math.min(75,x+2)+'%'; tip.style.top=Math.min(78,y+2)+'%'; tip.innerHTML='<strong class="ri-code">doc:'+(1000+i)+'</strong><span>'+['Documentation','Product','Engineering','Support'][i%4]+'</span><span>Click for exact neighbors</span>';
+        view.appendChild(dot); view.appendChild(tip);
+      });
+    }
+    for (let i=0;i<34;i++) {
+      const sim=.96-i*.013; const angle=seeded(i,3)*Math.PI*2; const radius=20+(1-sim)*520;
+      const x=50+Math.cos(angle)*radius/7; const y=50+Math.sin(angle)*radius/4.8;
+      const dot=document.createElement('button'); dot.className='ri-dot '+classes[i%4]; dot.style.left=x+'%'; dot.style.top=y+'%'; dot.setAttribute('aria-label','Document doc:'+(907+i)+' similarity '+sim.toFixed(3));
+      const tip=document.createElement('span'); tip.className='ri-tooltip'; tip.style.left=Math.min(72,x+2)+'%'; tip.style.top=Math.min(76,y+2)+'%'; tip.innerHTML='<strong class="ri-code">doc:'+(907+i)+'</strong><span class="ri-code">similarity '+sim.toFixed(3)+'</span><span>Exact whole-index result</span>';
+      neighbors.appendChild(dot); neighbors.appendChild(tip);
+    }
+    const tbody=document.getElementById('ri-table-body');
+    for (let i=0;i<18;i++) {
+      const id=[1842,907,331,2401,519,144,772,1930,225,3190,491,605,884,1208,1504,1702,2031,2440][i];
+      const sim=Math.max(.62,1-i*.0228).toFixed(3);
+      const row=document.createElement('button'); row.className='ri-table-row'+(i===0?' is-selected':''); row.setAttribute('aria-label','Inspect doc:'+id);
+      row.innerHTML='<span class="ri-swatch '+classes[i%4]+'"></span><span class="doc-id ri-code" title="doc:'+id+'">doc:'+id+'</span><span class="score ri-code">'+sim+'</span><span style="color:var(--text-muted)">›</span>';
+      tbody.appendChild(row);
+    }
+  })();
+  function riSetTheme(theme) {
+    const root=document.getElementById('ri-vector-mockup'); root.dataset.theme=theme;
+    document.getElementById('ri-dark-btn').classList.toggle('is-active',theme==='dark');
+    document.getElementById('ri-light-btn').classList.toggle('is-active',theme==='light');
+  }
+  function riSetState(state,button) {
+    document.getElementById('ri-vector-mockup').dataset.state=state;
+    document.querySelectorAll('[data-preview-state]').forEach(b=>b.classList.remove('is-active'));
+    if(button) button.classList.add('is-active');
+  }
+  function riSetTab(tab,button) {
+    document.querySelectorAll('.ri-tab').forEach(b=>{b.classList.remove('is-active');b.setAttribute('aria-selected','false')});
+    button.classList.add('is-active'); button.setAttribute('aria-selected','true');
+    document.querySelectorAll('.ri-view').forEach(v=>v.classList.toggle('is-active',v.dataset.view===tab));
+    const title=document.getElementById('ri-chart-heading'), sub=document.getElementById('ri-chart-subtitle'), inspector=document.getElementById('ri-inspector-title'), detail=document.getElementById('ri-inspector-subtitle'), count=document.getElementById('ri-result-count');
+    if(tab==='atlas'){title.textContent='Index atlas';sub.textContent='UMAP · cosine metric · 20,000 sampled documents';inspector.textContent='Sampled documents';detail.textContent='Displayed sample · derived coordinates';count.textContent='20,000 sampled · virtualized';}
+    if(tab==='neighbors'){title.textContent='Neighbors of doc:1842';sub.textContent='Radius preserves exact cosine similarity · angle is layout-only';inspector.textContent='Nearest documents';detail.textContent='Whole-index query · filter applied · 8 ms';count.textContent='50 nearest · virtualized';}
+    if(tab==='selection'){title.textContent='Selected region';sub.textContent='12 points selected from the displayed sample';inspector.textContent='Selected documents';detail.textContent='Local selection · sampled documents only';count.textContent='12 selected';}
+  }
+</script>

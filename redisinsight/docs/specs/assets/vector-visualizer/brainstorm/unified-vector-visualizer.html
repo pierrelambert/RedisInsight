@@ -1,0 +1,79 @@
+<style>
+  .app-frame { margin-top:20px; border:1px solid #333744; border-radius:12px; overflow:hidden; background:#0d0f14; box-shadow:0 18px 50px rgba(0,0,0,.28); }
+  .app-top { height:48px; display:flex; align-items:center; gap:12px; padding:0 15px; border-bottom:1px solid #292d37; background:#15171d; font-size:11px; }
+  .crumb { color:#858b99; } .strong { color:#f0f1f4; font-weight:600; }
+  .tag { border:1px solid #414654; border-radius:5px; padding:4px 7px; color:#aeb4c0; font-family:monospace; }
+  .app-body { display:grid; grid-template-columns:210px 1fr 290px; height:500px; }
+  .controls { border-right:1px solid #292d37; background:#13151b; padding:13px; }
+  .control-title { color:#e6e8ed; font-size:11px; font-weight:600; margin:2px 0 11px; }
+  .field { margin-bottom:14px; } .field label { display:block; color:#7f8694; font-size:9px; margin-bottom:5px; text-transform:uppercase; letter-spacing:.06em; }
+  .select { border:1px solid #373c49; border-radius:6px; padding:7px 8px; color:#d4d7df; background:#1b1e26; font-size:10px; }
+  .switch-line { display:flex; align-items:center; justify-content:space-between; color:#a7adba; font-size:10px; margin:9px 0; }
+  .switch { width:25px; height:13px; border-radius:8px; background:#62559a; position:relative; } .switch:after { content:''; position:absolute; width:9px; height:9px; background:#fff; border-radius:50%; right:2px; top:2px; }
+  .legend { display:flex; flex-direction:column; gap:7px; margin-top:12px; color:#9fa5b3; font-size:9px; }
+  .legend i { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:7px; }
+  .stage { position:relative; overflow:hidden; background:radial-gradient(circle at 50% 48%,#151a25 0,#0d1017 70%); }
+  .tabs { height:39px; display:flex; align-items:end; gap:2px; padding:0 12px; background:#14171e; border-bottom:1px solid #292d37; }
+  .tab { color:#8d94a3; font-size:10px; padding:11px 13px 9px; border-bottom:2px solid transparent; }
+  .tab.active { color:#ded5ff; border-color:#9f87ff; }
+  .canvas { position:absolute; inset:40px 0 0; }
+  .ring { position:absolute; border:1px dashed #303645; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); }
+  .dot { position:absolute; width:7px; height:7px; border-radius:50%; background:#3eafff; box-shadow:0 0 7px rgba(62,175,255,.72); }
+  .gold { background:#f4bd4d; box-shadow:0 0 7px rgba(244,189,77,.7); } .green { background:#42d99a; box-shadow:0 0 7px rgba(66,217,154,.66); }
+  .anchor { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:19px; height:19px; border-radius:50%; background:#a78bfa; box-shadow:0 0 0 7px rgba(167,139,250,.13); }
+  .note { position:absolute; left:16px; bottom:13px; border:1px solid #3c4150; border-radius:5px; padding:6px 8px; background:rgba(24,27,34,.9); color:#aeb4c1; font-size:9px; }
+  .inspector { border-left:1px solid #292d37; background:#13151b; display:flex; flex-direction:column; }
+  .inspect-head { padding:13px; border-bottom:1px solid #292d37; }
+  .inspect-head h4 { margin:0 0 4px; color:#eef0f4; font-size:12px; } .inspect-head p { margin:0; color:#858c9a; font-size:9px; }
+  .actions { display:flex; gap:6px; padding:9px 12px; border-bottom:1px solid #292d37; }
+  .btn { border:1px solid #3b404d; border-radius:5px; padding:5px 7px; color:#aeb4c1; font-size:9px; background:#1a1d24; }
+  .rows { padding:0 9px; overflow:hidden; }
+  .row { display:grid; grid-template-columns:18px 1fr 44px; gap:5px; align-items:center; padding:9px 4px; border-bottom:1px solid #252933; color:#a6acb8; font-size:9px; }
+  .row.active { background:#252031; color:#f2efff; } .score { text-align:right; font-family:monospace; color:#b9c0cd; }
+  .flow { display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:10px; align-items:center; margin-top:18px; }
+  .flow-step { border:1px solid #343846; background:#171920; border-radius:9px; padding:13px; min-height:64px; }
+  .flow-step b { display:block; color:#eceef2; font-size:12px; margin-bottom:4px; } .flow-step span { color:#9198a6; font-size:10px; line-height:1.4; }
+  .arrow { color:#7766ae; font-size:18px; }
+  @media (max-width:1000px) { .app-body { grid-template-columns:165px 1fr 230px; } }
+</style>
+
+<h2>One visualizer, three connected workspaces</h2>
+<p class="subtitle">The same sampled collection, filters, colors, and point selection flow across all three. This mockup is showing the <strong>Neighbors</strong> workspace.</p>
+
+<div class="app-frame">
+  <div class="app-top"><span class="crumb">Search indexes</span><span>›</span><span class="strong">idx:knowledge</span><span class="tag">HASH · 384 dims · COSINE</span><span style="margin-left:auto;color:#52d69a">● Live</span></div>
+  <div class="app-body">
+    <aside class="controls">
+      <div class="control-title">Visualization</div>
+      <div class="field"><label>Vector field</label><div class="select">embedding ▾</div></div>
+      <div class="field"><label>Color points by</label><div class="select">category ▾</div></div>
+      <div class="field"><label>Filter</label><div class="select">@lang:{en} ▾</div></div>
+      <div class="switch-line"><span>Show outliers</span><span class="switch"></span></div>
+      <div class="switch-line"><span>Labels on hover</span><span class="switch"></span></div>
+      <div class="field" style="margin-top:16px"><label>Loaded</label><div class="select">20,000 / 1.9M sampled</div></div>
+      <div class="legend"><span><i style="background:#3eafff"></i>Documentation</span><span><i style="background:#f4bd4d"></i>Product</span><span><i style="background:#42d99a"></i>Engineering</span></div>
+    </aside>
+    <main class="stage">
+      <div class="tabs"><span class="tab">Atlas</span><span class="tab active">Neighbors</span><span class="tab">Selection (12)</span></div>
+      <div class="canvas">
+        <div class="ring" style="width:110px;height:110px"></div><div class="ring" style="width:220px;height:220px"></div><div class="ring" style="width:340px;height:340px"></div>
+        <span class="anchor"></span>
+        <span class="dot" style="left:56%;top:46%"></span><span class="dot gold" style="left:44%;top:54%"></span><span class="dot" style="left:60%;top:59%"></span><span class="dot green" style="left:36%;top:42%"></span>
+        <span class="dot" style="left:68%;top:32%"></span><span class="dot gold" style="left:29%;top:61%"></span><span class="dot green" style="left:71%;top:69%"></span><span class="dot" style="left:22%;top:31%"></span>
+        <span class="dot gold" style="left:81%;top:48%"></span><span class="dot green" style="left:39%;top:80%"></span><span class="dot" style="left:18%;top:75%"></span><span class="dot gold" style="left:82%;top:22%"></span>
+        <div class="note">Distance from center = exact cosine distance · angle groups nearby documents</div>
+      </div>
+    </main>
+    <aside class="inspector">
+      <div class="inspect-head"><h4>Neighbors of doc:1842</h4><p>Exact Redis query · K = 50 · 8 ms</p></div>
+      <div class="actions"><span class="btn">Copy IDs</span><span class="btn">Export JSON</span><span class="btn">Filter</span></div>
+      <div class="rows"><div class="row active"><span>●</span><span>doc:1842</span><span class="score">1.000</span></div><div class="row"><span>●</span><span>doc:907</span><span class="score">0.942</span></div><div class="row"><span>●</span><span>doc:331</span><span class="score">0.908</span></div><div class="row"><span>●</span><span>doc:2401</span><span class="score">0.834</span></div><div class="row"><span>●</span><span>doc:519</span><span class="score">0.771</span></div><div class="row"><span>●</span><span>doc:144</span><span class="score">0.706</span></div></div>
+    </aside>
+  </div>
+</div>
+
+<div class="flow">
+  <div class="flow-step"><b>1 · Atlas</b><span>Explore approximate clusters, gaps, and outliers across a representative sample.</span></div><span class="arrow">→</span>
+  <div class="flow-step"><b>2 · Neighbors</b><span>Click any point to run an exact Redis similarity query and recenter the view.</span></div><span class="arrow">→</span>
+  <div class="flow-step"><b>3 · Selection</b><span>Shift-drag a region, inspect documents in a virtualized table, then copy or export.</span></div>
+</div>
