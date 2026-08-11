@@ -77,6 +77,9 @@ export const initialState: StateAppFeatures = {
       [FeatureFlags.vectorSearchEnhancements]: {
         flag: false,
       },
+      [FeatureFlags.devVectorVisualizer]: {
+        flag: false,
+      },
       [FeatureFlags.valueDecoder]: {
         flag: false,
       },

@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "module": "ESNext" },
+  "include": [
+    "src/health/**/*.ts",
+    "src/health/**/*.tsx",
+    "src/explore/**/*.ts",
+    "src/explore/**/*.tsx"
+  ],
+  "exclude": ["**/*.spec.ts", "**/*.spec.tsx"]
+}

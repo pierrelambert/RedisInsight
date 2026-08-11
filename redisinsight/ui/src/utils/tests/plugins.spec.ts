@@ -1,6 +1,7 @@
 import { getVisualizationsByCommand } from 'uiSrc/utils'
 import { IPluginVisualization } from 'uiSrc/slices/interfaces'
 import geodataPackage from '../../packages/geodata/package.json'
+import vectorVisualizerPackage from '../../packages/vector-visualizer/package.json'
 
 describe('getVisualizationsByCommand', () => {
   const boundedGeoRadiusRegex =
@@ -363,6 +364,76 @@ describe('getVisualizationsByCommand', () => {
     nativeGeoRegexes.forEach((pattern) => {
       expect(pattern).not.toContain(String.raw`\S{1,512}`)
       expect(pattern).not.toContain(String.raw`\s+[\s\S]{0,4096}`)
+    })
+  })
+
+  describe('vector visualizer matching', () => {
+    const vectorVisualization = vectorVisualizerPackage
+      .visualizations[0] as unknown as IPluginVisualization
+
+    it.each([
+      ['FT.SEARCH idx "*=>[KNN 10 @embedding $query_vector]" DIALECT 2'],
+      [
+        'FT.PROFILE idx SEARCH QUERY "*=>[KNN 10 @embedding $query_vector]" DIALECT 2',
+      ],
+      [
+        'FT.PROFILE idx HYBRID QUERY "*" VSIM @embedding $query_vector KNN 10 DIALECT 2',
+      ],
+      ['FT.AGGREGATE idx "*=>[KNN 10 @embedding $query_vector]" DIALECT 2'],
+      [
+        'FT.HYBRID idx SEARCH "*" VSIM @embedding $query_vector KNN 10 DIALECT 2',
+      ],
+      ['VSIM vectors VALUES 1 query_vector WITHSCORES'],
+    ])(
+      'offers vector visualization for supported vector syntax: %s',
+      (query) => {
+        expect(
+          getVisualizationsByCommand(query, [vectorVisualization]),
+        ).toEqual([vectorVisualization])
+      },
+    )
+
+    it.each([
+      ['FT.SEARCH idx "*"'],
+      ['FT.SEARCH idx "KNN"'],
+      ['FT.SEARCHX idx "*=>[KNN 10 @embedding $query_vector]"'],
+      ['VSIMILAR vectors VALUES 1 query_vector'],
+      ['FT.SEARCH idx "*" PARAMS 2 query_vector "*=>[KNN 10 @embedding $x]"'],
+      [
+        'FT.AGGREGATE idx "*" PARAMS 2 query_vector "*=>[KNN 10 @embedding $x]"',
+      ],
+      ['FT.HYBRID idx SEARCH "VSIM @embedding $query_vector KNN 10"'],
+      ['FT.SEARCH idx'],
+    ])(
+      'does not offer vector visualization for unsafe or malformed input: %s',
+      (query) => {
+        expect(
+          getVisualizationsByCommand(query, [vectorVisualization]),
+        ).toEqual([])
+      },
+    )
+
+    it('matches vector syntax before an oversized binary PARAMS payload without scanning the payload', () => {
+      const query = `FT.SEARCH idx "*=>[KNN 10 @embedding $query_vector]" PARAMS 2 query_vector "${'x'.repeat(20_001)}"`
+
+      expect(getVisualizationsByCommand(query, [vectorVisualization])).toEqual([
+        vectorVisualization,
+      ])
+    })
+
+    it('does not displace the existing Profile/Explain default', () => {
+      const explainDefault = {
+        id: 'profile-explain-viz',
+        matchCommands: ['FT.PROFILE'],
+        default: true,
+      } as IPluginVisualization
+      const views = getVisualizationsByCommand(
+        'FT.PROFILE idx SEARCH QUERY "*=>[KNN 10 @embedding $query_vector]"',
+        [explainDefault, vectorVisualization],
+      )
+
+      expect(views.filter((view) => view.default)).toEqual([explainDefault])
+      expect(vectorVisualization.default).toBe(false)
     })
   })
 })

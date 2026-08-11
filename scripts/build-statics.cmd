@@ -36,6 +36,8 @@ call npm install --prefix "%CLIENTS_LIST_DIR%"
 set GEODATA_DIR=".\redisinsight\ui\src\packages\geodata"
 call npm install --prefix "%GEODATA_DIR%"
 
+set VECTOR_VISUALIZER_DIR=".\redisinsight\ui\src\packages\vector-visualizer"
+
 ::  Build all plugins and common libraries
 call npm run build --prefix "%PACKAGES_DIR%"
 
@@ -81,3 +83,9 @@ if not exist "%PLUGINS_DIR%\geodata" mkdir "%PLUGINS_DIR%\geodata"
 if not exist "%PLUGINS_DIR%\geodata\dist" mkdir "%PLUGINS_DIR%\geodata\dist"
 xcopy "%GEODATA_DIR%\dist" "%PLUGINS_DIR%\geodata\dist\" /s /e /y
 copy "%GEODATA_DIR%\package.json" "%PLUGINS_DIR%\geodata\"
+
+:: Copy vector visualizer plugin. Its dependencies are installed from PACKAGES_DIR.
+if not exist "%PLUGINS_DIR%\vector-visualizer" mkdir "%PLUGINS_DIR%\vector-visualizer"
+if not exist "%PLUGINS_DIR%\vector-visualizer\dist" mkdir "%PLUGINS_DIR%\vector-visualizer\dist"
+xcopy "%VECTOR_VISUALIZER_DIR%\dist" "%PLUGINS_DIR%\vector-visualizer\dist\" /s /e /y
+copy "%VECTOR_VISUALIZER_DIR%\package.json" "%PLUGINS_DIR%\vector-visualizer\"

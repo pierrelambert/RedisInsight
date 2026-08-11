@@ -18,6 +18,7 @@ export enum PageNames {
   vectorSearch = 'vector-search',
   vectorSearchCreateIndex = 'create-index',
   vectorSearchQuery = 'query',
+  vectorVisualizer = 'vector-visualizer',
   browser = 'browser',
   search = 'search',
   slowLog = 'slowlog',
@@ -69,6 +70,8 @@ export const Pages = {
     `/${instanceId}/${PageNames.vectorSearch}/${PageNames.vectorSearchCreateIndex}`,
   vectorSearchQuery: (instanceId: string, indexName: string) =>
     `/${instanceId}/${PageNames.vectorSearch}/${indexName}/${PageNames.vectorSearchQuery}`,
+  vectorVisualizer: (instanceId: string) =>
+    `/${instanceId}/${PageNames.vectorVisualizer}`,
   workbench: (instanceId: string) => `/${instanceId}/${PageNames.workbench}`,
   search: (instanceId: string) => `/${instanceId}/${PageNames.search}`,
   pubSub: (instanceId: string) => `/${instanceId}/${PageNames.pubSub}`,

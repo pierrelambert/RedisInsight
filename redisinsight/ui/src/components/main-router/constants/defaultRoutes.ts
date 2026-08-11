@@ -15,6 +15,7 @@ import {
   AzureManualConnectionPage,
 } from 'uiSrc/pages'
 import { VectorSearchPageRouter } from 'uiSrc/pages/vector-search'
+import { VectorVisualizerPage } from 'uiSrc/pages/vector-visualizer'
 import WorkbenchPage from 'uiSrc/pages/workbench'
 import PubSubPage from 'uiSrc/pages/pub-sub'
 import AnalyticsPage from 'uiSrc/pages/analytics'
@@ -30,6 +31,11 @@ import { VECTOR_SEARCH_ROUTES } from './sub-routes/vectorSearchRoutes'
 const LazyBrowserPage = lazy(() => import('uiSrc/pages/browser'))
 const LazyVectorSearchPageRouter = lazy(
   () => import('uiSrc/pages/vector-search/VectorSearchPageRouter'),
+)
+const LazyVectorVisualizerPage = lazy(() =>
+  import('uiSrc/pages/vector-visualizer').then(({ VectorVisualizerPage }) => ({
+    default: VectorVisualizerPage,
+  })),
 )
 const LazyHomePage = lazy(() => import('uiSrc/pages/home'))
 const LazyWorkbenchPage = lazy(() => import('uiSrc/pages/workbench'))
@@ -79,6 +85,12 @@ const INSTANCE_ROUTES: IRoute[] = [
     path: Pages.vectorSearch(':instanceId'),
     component: LAZY_LOAD ? LazyVectorSearchPageRouter : VectorSearchPageRouter,
     routes: VECTOR_SEARCH_ROUTES,
+  },
+  {
+    pageName: PageNames.vectorVisualizer,
+    path: Pages.vectorVisualizer(':instanceId'),
+    component: LAZY_LOAD ? LazyVectorVisualizerPage : VectorVisualizerPage,
+    featureFlag: FeatureFlags.devVectorVisualizer,
   },
   {
     pageName: PageNames.workbench,

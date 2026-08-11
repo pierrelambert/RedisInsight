@@ -7,6 +7,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import path, { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { defaultConfig } from '../config/default';
+import { sanitizeVectorVisualizerCssAsset } from './vector-visualizer/src/distribution.ts';
 
 const riPlugins = [
   { name: 'redisearch', entry: 'src/main.tsx' },
@@ -15,6 +16,7 @@ const riPlugins = [
   { name: 'redistimeseries-app', entry: 'src/main.tsx' },
   { name: 'ri-explain', entry: 'src/main.tsx' },
   { name: 'geodata', entry: 'src/main.tsx' },
+  { name: 'vector-visualizer', entry: 'src/main.tsx' },
 ];
 
 /**
@@ -29,11 +31,31 @@ export default defineConfig({
     // Copy public static for all plugins
     viteStaticCopy({
       silent: true,
-      targets: riPlugins.map(({ name: pluginDir }) => ({
-        src: `./${pluginDir}/public/*`,
-        dest: `./${pluginDir}/dist/`,
-      })),
+      targets: riPlugins
+        .map(({ name: pluginDir }) => ({
+          src: `./${pluginDir}/public/*`,
+          dest: `./${pluginDir}/dist/`,
+        }))
+        .concat([
+          {
+            src: './node_modules/umap-js/LICENSE',
+            dest: './vector-visualizer/dist/',
+            rename: 'UMAP-JS-LICENSE',
+          },
+        ]),
     }),
+    {
+      name: 'sanitize-vector-visualizer-distribution-css',
+      generateBundle(_, bundle) {
+        const asset = bundle['vector-visualizer/dist/styles.css'];
+        if (asset?.type === 'asset') {
+          asset.source = sanitizeVectorVisualizerCssAsset(
+            asset.fileName,
+            asset.source,
+          );
+        }
+      },
+    },
   ],
   resolve: {
     alias: {

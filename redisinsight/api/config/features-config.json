@@ -12,6 +12,7 @@
         }
       ]
     },
+    "dev-vectorVisualizer": { "flag": false, "perc": [[0, 100]] },
     "vectorSearchEnhancements": {
       "flag": true,
       "perc": [[0, 100]],

@@ -69,6 +69,13 @@ describe('LocalFeaturesConfigService', () => {
     mockedAxios.get.mockResolvedValue({ data: mockFeaturesConfigJson });
   });
 
+  it('ships the Vector Visualizer development flag disabled by default', () => {
+    expect(defaultConfig.features[KnownFeatures.DevVectorVisualizer]).toEqual({
+      flag: false,
+      perc: [[0, 100]],
+    });
+  });
+
   describe('onApplicationBootstrap', () => {
     it('should sync on bootstrap', async () => {
       const spy = jest.spyOn(service, 'sync');

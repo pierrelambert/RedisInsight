@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atlas fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Atlas fixture</h1>
+      <p role="note">2D projection of a sample</p>
+      <div>
+        <button type="button" id="load-large">Load 20,000 points</button>
+        <button type="button" id="load-empty">Load 0 points</button>
+        <button type="button" id="malformed">Load malformed layout</button>
+        <button type="button" id="run-2k">Run 2,000 UMAP layout</button>
+        <button type="button" id="run-20k">Run 20,000 UMAP layout</button>
+        <button type="button" id="select">Select first plotted record</button>
+        <button type="button" id="cancel">Cancel layout worker</button>
+        <button type="button" id="context-loss">
+          Simulate WebGL context loss
+        </button>
+      </div>
+      <p id="count">0 plotted records</p>
+      <p id="status" role="status">Ready</p>
+      <canvas
+        id="atlas"
+        aria-label="Atlas plot; use the linked selection table for keyboard navigation"
+      ></canvas>
+      <section aria-label="Linked selection table">
+        <button type="button" id="selected">No plotted record selected</button>
+      </section>
+      <dl id="provenance"></dl>
+    </main>
+    <script type="module" src="/src/atlas/e3-t1.fixture.ts"></script>
+  </body>
+</html>

@@ -38,6 +38,7 @@ export enum KnownFeatures {
   Array = 'array',
   DevLanguage = 'dev-language',
   VectorSearchEnhancements = 'vectorSearchEnhancements',
+  DevVectorVisualizer = 'dev-vectorVisualizer',
   ValueDecoder = 'valueDecoder',
   AppUpdateStrategySettings = 'appUpdateStrategySettings',
 }

@@ -16,6 +16,7 @@ export enum FeatureFlags {
   devBrowser = 'dev-browser',
   devLanguage = 'dev-language',
   vectorSearchEnhancements = 'vectorSearchEnhancements',
+  devVectorVisualizer = 'dev-vectorVisualizer',
   valueDecoder = 'valueDecoder',
   appUpdateStrategySettings = 'appUpdateStrategySettings',
 }

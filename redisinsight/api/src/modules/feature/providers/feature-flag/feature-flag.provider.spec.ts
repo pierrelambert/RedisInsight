@@ -48,6 +48,11 @@ describe('FeatureFlagProvider', () => {
         await service.getStrategy(KnownFeatures.CloudSsoRecommendedSettings),
       ).toBeInstanceOf(CommonFlagStrategy);
     });
+    it('registers the default-false Vector Visualizer dev flag as a common flag', async () => {
+      expect(
+        await service.getStrategy(KnownFeatures.DevVectorVisualizer),
+      ).toBeInstanceOf(CommonFlagStrategy);
+    });
     it('should return default strategy when directly called', async () => {
       expect(await service.getStrategy('default')).toBeInstanceOf(
         DefaultFlagStrategy,

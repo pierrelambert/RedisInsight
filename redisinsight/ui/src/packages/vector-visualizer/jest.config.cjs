@@ -1,0 +1,40 @@
+const path = require('path');
+
+const rootDir = path.resolve(__dirname, '../../../../..');
+const rootConfig = require(path.join(rootDir, 'jest.config.cjs'));
+
+module.exports = {
+  ...rootConfig,
+  rootDir,
+  moduleNameMapper: {
+    ...rootConfig.moduleNameMapper,
+    '^react$': '<rootDir>/node_modules/react',
+    '^react-dom$': '<rootDir>/node_modules/react-dom',
+    '^redisinsight-plugin-sdk$':
+      '<rootDir>/redisinsight/ui/src/packages/redisinsight-plugin-sdk/index.js',
+  },
+  modulePathIgnorePatterns: [
+    '<rootDir>/redisinsight/api',
+    '<rootDir>/redisinsight/desktop',
+    '<rootDir>/redisinsight/ui/src/mocks',
+    '<rootDir>/tests',
+  ],
+  coveragePathIgnorePatterns: ['/node_modules/'],
+  coverageThreshold: {
+    global: {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
+    },
+  },
+  reporters: ['default'],
+  roots: ['<rootDir>/redisinsight/ui/src/packages/vector-visualizer/src'],
+  setupFilesAfterEnv: [
+    '<rootDir>/redisinsight/ui/src/packages/vector-visualizer/src/jest.setup.ts',
+  ],
+  testMatch: [
+    '<rootDir>/redisinsight/ui/src/packages/vector-visualizer/src/**/*.spec.ts',
+    '<rootDir>/redisinsight/ui/src/packages/vector-visualizer/src/**/*.spec.tsx',
+  ],
+};

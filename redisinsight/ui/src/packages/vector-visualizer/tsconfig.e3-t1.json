@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext"
+  },
+  "include": [
+    "src/sampling/sampling.ts",
+    "src/worker/layout.ts",
+    "src/worker/layout.worker.ts",
+    "src/worker/browserWorker.ts",
+    "src/renderer/**/*.ts",
+    "src/atlas/**/*.ts",
+    "src/atlas/**/*.tsx"
+  ],
+  "exclude": ["**/*.spec.ts", "**/*.spec.tsx"]
+}

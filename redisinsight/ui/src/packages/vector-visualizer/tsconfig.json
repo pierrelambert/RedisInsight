@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "include": ["src/**/*"],
+  "exclude": [
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/**/*.fixture.ts",
+    "src/**/*.fixture.tsx",
+    "src/jest.setup.ts"
+  ]
+}

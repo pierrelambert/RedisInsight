@@ -1,0 +1,24 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "paths": {
+      "uiSrc/*": ["src/*"],
+      "apiClient": ["../api-client"],
+      "apiClient/*": ["../api-client/*"],
+      "redisinsight-plugin-sdk": [
+        "src/packages/redisinsight-plugin-sdk/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/main.tsx",
+    "src/workbenchIntegration.ts",
+    "src/workbenchSdk.ts",
+    "src/query-lab/**/*.ts",
+    "src/query-lab/**/*.tsx",
+    "src/selection/**/*.ts",
+    "src/selection/**/*.tsx"
+  ],
+  "exclude": ["**/*.spec.ts", "**/*.spec.tsx"]
+}
