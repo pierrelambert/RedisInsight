@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
+import { useHistory, useParams } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from 'uiSrc/slices/hooks'
 
 import {
@@ -11,7 +12,10 @@ import {
 } from 'uiSrc/slices/browser/vectorSet'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import { sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
-import { bufferToString } from 'uiSrc/utils'
+import { bufferToString, bufferToUint8Array } from 'uiSrc/utils'
+import { FeatureFlags, Pages } from 'uiSrc/constants'
+import { appFeatureFlagsFeaturesSelector } from 'uiSrc/slices/app/features'
+import { setVectorVisualizerSource } from 'uiSrc/pages/vector-visualizer'
 import {
   KeyDetailsHeader,
   KeyDetailsHeaderProps,
@@ -46,6 +50,11 @@ const VectorSetDetails = (props: Props) => {
   const { onRemoveKey, onOpenAddItemPanel, onCloseAddItemPanel } = props
 
   const dispatch = useAppDispatch()
+  const history = useHistory()
+  const { instanceId } = useParams<{ instanceId: string }>()
+  const vectorVisualizerEnabled = useAppSelector(
+    appFeatureFlagsFeaturesSelector,
+  )[FeatureFlags.devVectorVisualizer]?.flag
   const { loading } = useAppSelector(selectedKeySelector)
   const selectedKeyData = useAppSelector(selectedKeyDataSelector)
   const { id: databaseId } = useAppSelector(connectedInstanceSelector)
@@ -101,6 +110,16 @@ const VectorSetDetails = (props: Props) => {
     })
     dispatch(clearSimilaritySearch())
   }, [databaseId, dispatch])
+
+  const handleVisualize = useCallback(() => {
+    if (!selectedKeyData?.name) return
+    const key =
+      typeof selectedKeyData.name === 'string'
+        ? new TextEncoder().encode(selectedKeyData.name)
+        : bufferToUint8Array(selectedKeyData.name)
+    setVectorVisualizerSource({ kind: 'vector-set', key })
+    history.push(Pages.vectorVisualizer(instanceId))
+  }, [history, instanceId, selectedKeyData?.name])
 
   const { actionsConfig, similarityPrefill } = useVectorSetActionsConfig({
     onRemoveKey,
@@ -163,6 +182,7 @@ const VectorSetDetails = (props: Props) => {
         total={total}
         hasSimilarityResults={hasSimilarityResults}
         onClearResults={handleClearResults}
+        onVisualize={vectorVisualizerEnabled ? handleVisualize : undefined}
         additionalActions={similarityAdditionalActions}
       />
       <S.DetailsBody>

@@ -11,6 +11,7 @@ export interface Props {
   /** Swaps "Add Elements" for "Clear results" when `true`. */
   hasSimilarityResults: boolean
   onClearResults: () => void
+  onVisualize?: () => void
   /**
    * Extra actions rendered at the right end of the actions row.
    * Render-prop so callers can react to the AutoSizer-reported width.

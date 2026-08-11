@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, userEvent, within } from 'uiSrc/utils/test-utils'
+import { VectorSimilarityIcon } from 'uiSrc/components/base/icons'
 import { ActionsCell } from './ActionsCell'
 import { ActionsCellProps, IndexListRow } from '../../IndexList.types'
 
@@ -43,5 +44,31 @@ describe('ActionsCell', () => {
       screen.getByTestId('index-actions-edit-btn-idx-products'),
     )
     expect(onEdit).toHaveBeenCalledWith('products-idx')
+  })
+
+  it('renders action icons as bounded menu-leading icons with text', async () => {
+    renderComponent({
+      actions: [
+        {
+          name: 'Vector Visualizer',
+          label: 'Vector Visualizer',
+          icon: VectorSimilarityIcon,
+          callback: jest.fn(),
+        },
+      ],
+    })
+
+    const actionsCell = screen.getByTestId('index-actions-idx-products')
+    const [menuTrigger] = within(actionsCell).getAllByRole('button')
+    await userEvent.click(menuTrigger)
+
+    const menuItem = screen.getByTestId(
+      'index-actions-vector visualizer-btn-idx-products',
+    )
+
+    expect(menuItem).toHaveTextContent('Vector Visualizer')
+    expect(
+      screen.getByTestId('index-actions-vector visualizer-icon-idx-products'),
+    ).toBeInTheDocument()
   })
 })

@@ -61,19 +61,31 @@ export const ActionsCell = ({
           </MenuTrigger>
           <MenuContent placement="bottom" align="end">
             {actions.map((action) => {
+              const ActionIcon = action.icon
               const handleActionClick = (e: React.MouseEvent) => {
                 e.stopPropagation()
                 action.callback(name)
               }
               return (
-                <MenuItem
+                <MenuItem.Compose
                   key={action.name}
-                  icon={action.icon}
                   variant={action.variant}
-                  text={action.label ?? action.name}
                   onClick={handleActionClick}
                   data-testid={`index-actions-${action.name.toLowerCase()}-btn-${id}`}
-                />
+                >
+                  {ActionIcon ? (
+                    <ActionIcon
+                      aria-hidden
+                      color="currentColor"
+                      customSize="16px"
+                      data-testid={`index-actions-${action.name.toLowerCase()}-icon-${id}`}
+                      style={{
+                        flex: '0 0 16px',
+                      }}
+                    />
+                  ) : null}
+                  <MenuItem.Text>{action.label ?? action.name}</MenuItem.Text>
+                </MenuItem.Compose>
               )
             })}
             <MenuDropdownArrow />

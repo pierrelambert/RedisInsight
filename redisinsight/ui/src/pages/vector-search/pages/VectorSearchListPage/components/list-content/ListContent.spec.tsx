@@ -1,7 +1,11 @@
 import React from 'react'
 import { faker } from '@faker-js/faker'
 import { cleanup, render, screen, userEvent } from 'uiSrc/utils/test-utils'
-import { ShowIcon, DeleteIcon } from 'uiSrc/components/base/icons'
+import {
+  ShowIcon,
+  DeleteIcon,
+  VectorSimilarityIcon,
+} from 'uiSrc/components/base/icons'
 
 import { useListContent } from 'uiSrc/pages/vector-search/hooks/useListContent'
 import { ListContent } from './ListContent'
@@ -21,12 +25,19 @@ jest.mock('uiSrc/pages/vector-search/hooks/useIndexInfo/useIndexInfo', () => ({
   }),
 }))
 
+const mockedUseIndexInfo = jest.requireMock(
+  'uiSrc/pages/vector-search/hooks/useIndexInfo/useIndexInfo',
+).useIndexInfo as jest.Mock
+
 const mockOnQueryClick = jest.fn()
 const mockOnCloseViewPanel = jest.fn()
+const mockOnCloseVisualize = jest.fn()
+const mockOnVectorFieldSelected = jest.fn()
 const mockOnConfirmDelete = jest.fn()
 const mockOnCloseDelete = jest.fn()
 const mockViewIndexCallback = jest.fn()
 const mockBrowseDatasetCallback = jest.fn()
+const mockVisualizeCallback = jest.fn()
 const mockDeleteCallback = jest.fn()
 
 const defaultHookReturn: UseListContentReturn = {
@@ -49,6 +60,9 @@ const defaultHookReturn: UseListContentReturn = {
   onQueryClick: mockOnQueryClick,
   viewingIndexName: null,
   onCloseViewPanel: mockOnCloseViewPanel,
+  visualizingIndexName: null,
+  onCloseVisualize: mockOnCloseVisualize,
+  onVectorFieldSelected: mockOnVectorFieldSelected,
   pendingDeleteIndex: null,
   onConfirmDelete: mockOnConfirmDelete,
   onCloseDelete: mockOnCloseDelete,
@@ -89,6 +103,12 @@ describe('ListContent', () => {
     renderComponent()
 
     expect(screen.getByTestId('vector-search--list--table')).toBeInTheDocument()
+  })
+
+  it('does not mount index-info lookup until an index is selected for visualization', () => {
+    renderComponent()
+
+    expect(mockedUseIndexInfo).not.toHaveBeenCalled()
   })
 
   it('should render empty state when no data', () => {
@@ -158,5 +178,44 @@ describe('ListContent', () => {
     await user.click(browseOption)
 
     expect(mockBrowseDatasetCallback).toHaveBeenCalledWith(mockIndexRow.name)
+  })
+
+  it('renders Vector Visualizer as a labeled icon menu action', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 })
+    setupHook({
+      data: [mockIndexRow],
+      actions: [
+        { name: 'View index', icon: ShowIcon, callback: mockViewIndexCallback },
+        {
+          name: 'Browse dataset',
+          callback: mockBrowseDatasetCallback,
+        },
+        {
+          name: 'Vector Visualizer',
+          label: 'Vector Visualizer',
+          icon: VectorSimilarityIcon,
+          callback: mockVisualizeCallback,
+        },
+        {
+          name: 'Delete',
+          icon: DeleteIcon,
+          variant: 'destructive',
+          callback: mockDeleteCallback,
+        },
+      ],
+    })
+    renderComponent()
+
+    const menuTrigger = screen.getByTestId(
+      `index-actions-menu-trigger-${mockIndexRow.id}`,
+    )
+    await user.click(menuTrigger)
+
+    const visualizeOption = screen.getByTestId(
+      `index-actions-vector visualizer-btn-${mockIndexRow.id}`,
+    )
+
+    expect(visualizeOption).toHaveTextContent('Vector Visualizer')
+    expect(visualizeOption.querySelector('svg')).toBeInTheDocument()
   })
 })

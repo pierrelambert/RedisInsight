@@ -1,14 +1,20 @@
 import React from 'react'
 import { fireEvent, render, screen } from 'uiSrc/utils/test-utils'
-import { stringToBuffer } from 'uiSrc/utils'
+import { anyToBuffer, stringToBuffer } from 'uiSrc/utils'
 import { vectorSetSimilaritySearchSelector } from 'uiSrc/slices/browser/vectorSet'
 import { VectorSetSimilaritySearchResponse } from 'uiSrc/slices/interfaces/vectorSet'
+import { FeatureFlags } from 'uiSrc/constants'
+import { appFeatureFlagsFeaturesSelector } from 'uiSrc/slices/app/features'
+import { selectedKeyDataSelector } from 'uiSrc/slices/browser/keys'
+import { consumeVectorVisualizerSource } from 'uiSrc/pages/vector-visualizer'
 
 import { Props, VectorSetDetails } from './VectorSetDetails'
 
 const mockedVectorSetSimilaritySearchSelector = jest.mocked(
   vectorSetSimilaritySearchSelector,
 )
+const mockedFeatureFlagsSelector = jest.mocked(appFeatureFlagsFeaturesSelector)
+const mockedSelectedKeyDataSelector = jest.mocked(selectedKeyDataSelector)
 
 const defaultProps: Props = {
   onRemoveKey: jest.fn(),
@@ -49,6 +55,16 @@ jest.mock('uiSrc/slices/browser/vectorSet', () => {
   }
 })
 
+jest.mock('uiSrc/slices/app/features', () => ({
+  ...jest.requireActual('uiSrc/slices/app/features'),
+  appFeatureFlagsFeaturesSelector: jest.fn(),
+}))
+
+jest.mock('uiSrc/slices/browser/keys', () => ({
+  ...jest.requireActual('uiSrc/slices/browser/keys'),
+  selectedKeyDataSelector: jest.fn(),
+}))
+
 const setSimilaritySearchData = (data?: VectorSetSimilaritySearchResponse) => {
   mockedVectorSetSimilaritySearchSelector.mockReturnValue({
     loading: false,
@@ -60,6 +76,9 @@ const setSimilaritySearchData = (data?: VectorSetSimilaritySearchResponse) => {
 describe('VectorSetDetails', () => {
   beforeEach(() => {
     setSimilaritySearchData(undefined)
+    mockedFeatureFlagsSelector.mockReturnValue({})
+    mockedSelectedKeyDataSelector.mockReturnValue(null)
+    consumeVectorVisualizerSource()
   })
 
   it('should render', () => {
@@ -79,6 +98,14 @@ describe('VectorSetDetails', () => {
   it('should render add elements button', () => {
     renderComponent()
     expect(screen.getByTestId('add-key-value-items-btn')).toBeInTheDocument()
+  })
+
+  it('hides Visualize while the development flag is off', () => {
+    renderComponent()
+
+    expect(
+      screen.queryByTestId('vector-set-visualize-btn'),
+    ).not.toBeInTheDocument()
   })
 
   it('should open add element panel when add button is clicked', () => {
@@ -126,5 +153,40 @@ describe('VectorSetDetails', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('90.00 %')).toBeInTheDocument()
     expect(screen.getByText('50.00 %')).toBeInTheDocument()
+  })
+
+  it('encodes a string Vector Set key before handing it to the native host', () => {
+    const key = 'vector-set:alpha'
+    mockedFeatureFlagsSelector.mockReturnValue({
+      [FeatureFlags.devVectorVisualizer]: { flag: true },
+    })
+    mockedSelectedKeyDataSelector.mockReturnValue({ name: key } as never)
+
+    renderComponent()
+    fireEvent.click(screen.getByTestId('vector-set-visualize-btn'))
+
+    const source = consumeVectorVisualizerSource()
+    expect(source).toEqual({
+      kind: 'vector-set',
+      key: new TextEncoder().encode(key),
+    })
+  })
+
+  it('preserves every RedisResponseBuffer key byte for the native host', () => {
+    const key = anyToBuffer(new Uint8Array([0, 255, 10]))
+    mockedFeatureFlagsSelector.mockReturnValue({
+      [FeatureFlags.devVectorVisualizer]: { flag: true },
+    })
+    mockedSelectedKeyDataSelector.mockReturnValue({ name: key } as never)
+
+    renderComponent()
+    fireEvent.click(screen.getByTestId('vector-set-visualize-btn'))
+
+    const source = consumeVectorVisualizerSource()
+    expect(source).toEqual({
+      kind: 'vector-set',
+      key: new Uint8Array([0, 255, 10]),
+    })
+    expect(source?.kind === 'vector-set' && source.key).not.toBe(key.data)
   })
 })

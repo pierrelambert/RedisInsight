@@ -20,6 +20,7 @@ jest.mock(
 const PREVIEW_TEST_ID = 'vector-set-preview-summary'
 const ADD_BUTTON_TEST_ID = 'add-key-value-items-btn'
 const CLEAR_BUTTON_TEST_ID = 'similarity-search-clear-results-btn'
+const VISUALIZE_BUTTON_TEST_ID = 'vector-set-visualize-btn'
 
 const defaultProps: Props = {
   openAddItemPanel: jest.fn(),
@@ -78,5 +79,21 @@ describe('VectorSetKeySubheader', () => {
 
     fireEvent.click(screen.getByTestId(CLEAR_BUTTON_TEST_ID))
     expect(onClearResults).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Visualize hidden unless the feature-gated callback is provided', () => {
+    renderComponent()
+    expect(
+      screen.queryByTestId(VISUALIZE_BUTTON_TEST_ID),
+    ).not.toBeInTheDocument()
+  })
+
+  it('calls the feature-gated Visualize callback without changing existing actions', () => {
+    const onVisualize = jest.fn()
+    renderComponent({ onVisualize })
+
+    fireEvent.click(screen.getByTestId(VISUALIZE_BUTTON_TEST_ID))
+    expect(onVisualize).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId(ADD_BUTTON_TEST_ID)).toBeInTheDocument()
   })
 })

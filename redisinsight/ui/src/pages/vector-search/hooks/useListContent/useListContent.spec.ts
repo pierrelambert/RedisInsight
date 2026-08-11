@@ -3,7 +3,7 @@ import reactRouterDom from 'react-router-dom'
 import { faker } from '@faker-js/faker'
 import { renderHook, act } from 'uiSrc/utils/test-utils'
 
-import { Pages } from 'uiSrc/constants'
+import { FeatureFlags, Pages } from 'uiSrc/constants'
 import {
   deleteRedisearchIndexAction,
   redisearchListSelector,
@@ -18,6 +18,8 @@ import {
 
 import { useListContent } from './useListContent'
 import { useIndexListData } from '../useIndexListData'
+import { consumeVectorVisualizerSource } from 'uiSrc/pages/vector-visualizer'
+import { appFeatureFlagsFeaturesSelector } from 'uiSrc/slices/app/features'
 
 jest.mock('uiSrc/slices/hooks', () => ({
   ...jest.requireActual('uiSrc/slices/hooks'),
@@ -64,6 +66,7 @@ const mockDispatch = jest.fn()
 const mockPush = jest.fn()
 const mockInstanceId = faker.string.uuid()
 const mockDatabaseId = faker.string.uuid()
+let featureFlags: Record<string, { flag: boolean }> = {}
 
 describe('useListContent', () => {
   const mockUseSelector = useAppSelector as jest.Mock
@@ -84,12 +87,17 @@ describe('useListContent', () => {
       if (selector === connectedInstanceSelector) {
         return { id: mockDatabaseId }
       }
+      if (selector === appFeatureFlagsFeaturesSelector) {
+        return featureFlags
+      }
       return {}
     })
     ;(useIndexListData as jest.Mock).mockReturnValue({
       data: [],
       loading: false,
     })
+    featureFlags = {}
+    consumeVectorVisualizerSource()
   })
 
   it('should return data and loading from useIndexListData', () => {
@@ -163,6 +171,59 @@ describe('useListContent', () => {
     expect(result.current.actions[1].name).toBe('Browse dataset')
     expect(result.current.actions[2].name).toBe('Delete')
     expect(result.current.actions[2].variant).toBe('destructive')
+  })
+
+  it('hides Vector Visualizer while the dev flag is off', () => {
+    const { result } = renderHook(() => useListContent())
+
+    expect(result.current.actions.map(({ name }) => name)).not.toContain(
+      'Vector Visualizer',
+    )
+  })
+
+  it('adds a labeled Vector Visualizer action with a menu icon when the dev flag is on', () => {
+    featureFlags = { [FeatureFlags.devVectorVisualizer]: { flag: true } }
+    const { result } = renderHook(() => useListContent())
+
+    const visualizeAction = result.current.actions.find(
+      ({ name }) => name === 'Vector Visualizer',
+    )
+
+    expect(visualizeAction).toMatchObject({
+      name: 'Vector Visualizer',
+      label: 'Vector Visualizer',
+    })
+    expect(visualizeAction?.icon).toBeDefined()
+  })
+
+  it('opens the field picker, hands off the exact Search source, and navigates when the dev flag is on', () => {
+    featureFlags = { [FeatureFlags.devVectorVisualizer]: { flag: true } }
+    const { result } = renderHook(() => useListContent())
+    const index = 'idx-products'
+
+    const visualizeAction = result.current.actions.find(
+      ({ name }) => name === 'Vector Visualizer',
+    )
+    expect(visualizeAction).toBeDefined()
+
+    act(() => {
+      visualizeAction?.callback(index)
+    })
+    expect(result.current.visualizingIndexName).toBe(index)
+
+    act(() => {
+      result.current.onVectorFieldSelected('embedding')
+    })
+
+    expect(consumeVectorVisualizerSource()).toEqual({
+      kind: 'search-index',
+      index,
+      vectorField: 'embedding',
+    })
+    expect(mockPush).toHaveBeenCalledWith(
+      Pages.vectorVisualizer(mockInstanceId),
+    )
+    expect(result.current.visualizingIndexName).toBeNull()
   })
 
   describe('onQueryClick', () => {

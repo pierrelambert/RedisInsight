@@ -12,6 +12,7 @@ import { ClearResultsAction } from '../clear-results-action'
 import * as S from './VectorSetKeySubheader.styles'
 import { Props } from './VectorSetKeySubheader.types'
 import { Spacer } from 'uiSrc/components/base/layout/spacer'
+import { Button } from 'uiSrc/components/base/forms/buttons'
 
 const VectorSetKeySubheader = ({
   openAddItemPanel,
@@ -20,6 +21,7 @@ const VectorSetKeySubheader = ({
   total,
   hasSimilarityResults,
   onClearResults,
+  onVisualize,
   additionalActions,
 }: Props) => {
   const { t } = useTranslation()
@@ -63,6 +65,15 @@ const VectorSetKeySubheader = ({
                     openAddItemPanel={openAddItemPanel}
                   />
                 )}
+                {onVisualize ? (
+                  <Button
+                    size="small"
+                    data-testid="vector-set-visualize-btn"
+                    onClick={onVisualize}
+                  >
+                    {t('vectorVisualizer.actions.visualize')}
+                  </Button>
+                ) : null}
                 {additionalActions ? (
                   <>
                     <Spacer size="l" direction="horizontal" />

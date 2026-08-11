@@ -4,7 +4,7 @@ import { useHistory, useParams } from 'react-router-dom'
 
 import { useTranslation } from 'uiSrc/i18n'
 
-import { BrowserStorageItem, Pages } from 'uiSrc/constants'
+import { BrowserStorageItem, FeatureFlags, Pages } from 'uiSrc/constants'
 import { bufferToString, stringToBuffer } from 'uiSrc/utils'
 import { encodeIndexNameForUrl } from 'uiSrc/pages/vector-search/utils'
 import {
@@ -17,6 +17,7 @@ import {
   ShowIcon,
   DeleteIcon,
   VectorSearchKeyIcon,
+  VectorSimilarityIcon,
 } from 'uiSrc/components/base/icons'
 import { addMessageNotification } from 'uiSrc/slices/app/notifications'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
@@ -25,6 +26,8 @@ import { QueryLibraryService } from 'uiSrc/services/query-library/QueryLibrarySe
 import { queryLibraryNotifications } from 'uiSrc/pages/vector-search/constants'
 import { SearchIndexDetailsSource } from 'uiSrc/pages/vector-search/telemetry.constants'
 import { localStorageService } from 'uiSrc/services'
+import { appFeatureFlagsFeaturesSelector } from 'uiSrc/slices/app/features'
+import { setVectorVisualizerSource } from 'uiSrc/pages/vector-visualizer'
 
 import { IndexListAction } from '../../components/index-list/IndexList.types'
 import { useIndexListData } from '../useIndexListData'
@@ -37,6 +40,9 @@ export const useListContent = (search = '') => {
 
   const { data: rawIndexes } = useAppSelector(redisearchListSelector)
   const { id: databaseId } = useAppSelector(connectedInstanceSelector)
+  const vectorVisualizerEnabled = useAppSelector(
+    appFeatureFlagsFeaturesSelector,
+  )[FeatureFlags.devVectorVisualizer]?.flag
   const indexes = useMemo(
     () => rawIndexes.map((index) => bufferToString(index)),
     [rawIndexes],
@@ -58,6 +64,9 @@ export const useListContent = (search = '') => {
     null,
   )
   const [viewingIndexName, setViewingIndexName] = useState<string | null>(null)
+  const [visualizingIndexName, setVisualizingIndexName] = useState<
+    string | null
+  >(null)
 
   const handleQueryClick = useCallback(
     (indexName: string) => {
@@ -89,6 +98,24 @@ export const useListContent = (search = '') => {
   const handleCloseViewPanel = useCallback(() => {
     setViewingIndexName(null)
   }, [])
+
+  const handleVisualize = useCallback((indexName: string) => {
+    setVisualizingIndexName(indexName)
+  }, [])
+
+  const handleVectorFieldSelected = useCallback(
+    (vectorField: string) => {
+      if (!visualizingIndexName) return
+      setVectorVisualizerSource({
+        kind: 'search-index',
+        index: visualizingIndexName,
+        vectorField,
+      })
+      setVisualizingIndexName(null)
+      history.push(Pages.vectorVisualizer(instanceId))
+    },
+    [history, instanceId, visualizingIndexName],
+  )
 
   const handleBrowseDataset = useCallback(
     (indexName: string) => {
@@ -169,6 +196,16 @@ export const useListContent = (search = '') => {
         icon: VectorSearchKeyIcon,
         callback: handleBrowseDataset,
       },
+      ...(vectorVisualizerEnabled
+        ? [
+            {
+              name: 'Vector Visualizer',
+              label: t('vectorSearch.list.action.visualizeVectors'),
+              icon: VectorSimilarityIcon,
+              callback: handleVisualize,
+            },
+          ]
+        : []),
       {
         name: 'Delete',
         label: t('vectorSearch.list.action.delete'),
@@ -177,7 +214,14 @@ export const useListContent = (search = '') => {
         callback: handleDelete,
       },
     ],
-    [handleViewIndex, handleBrowseDataset, handleDelete, t],
+    [
+      handleViewIndex,
+      handleBrowseDataset,
+      handleDelete,
+      handleVisualize,
+      t,
+      vectorVisualizerEnabled,
+    ],
   )
 
   return {
@@ -188,6 +232,9 @@ export const useListContent = (search = '') => {
     onQueryClick: handleQueryClick,
     viewingIndexName,
     onCloseViewPanel: handleCloseViewPanel,
+    visualizingIndexName,
+    onCloseVisualize: () => setVisualizingIndexName(null),
+    onVectorFieldSelected: handleVectorFieldSelected,
     pendingDeleteIndex,
     onConfirmDelete: handleConfirmDelete,
     onCloseDelete: handleCloseDelete,

@@ -15,3 +15,11 @@ export const ScrollableWrapper = styled.div`
   height: 100%;
   overflow: auto;
 `
+
+export const VectorFieldPicker = styled(Col)`
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  gap: ${({ theme }) => theme.core.space.space100};
+`

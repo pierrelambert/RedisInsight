@@ -13,6 +13,7 @@ import { useListContent } from 'uiSrc/pages/vector-search/hooks/useListContent'
 import * as S from './ListContent.styles'
 import { ListContentProps } from './ListContent.types'
 import { DeleteIndexConfirmation } from '../delete-index-confirmation/DeleteIndexConfirmation'
+import { VectorFieldPicker } from './VectorFieldPicker'
 
 export const ListContent = ({ search }: ListContentProps) => {
   const {
@@ -26,6 +27,9 @@ export const ListContent = ({ search }: ListContentProps) => {
     pendingDeleteIndex,
     onConfirmDelete,
     onCloseDelete,
+    visualizingIndexName,
+    onCloseVisualize,
+    onVectorFieldSelected,
   } = useListContent(search)
 
   return (
@@ -78,6 +82,13 @@ export const ListContent = ({ search }: ListContentProps) => {
         onConfirm={onConfirmDelete}
         onClose={onCloseDelete}
       />
+      {visualizingIndexName && (
+        <VectorFieldPicker
+          indexName={visualizingIndexName}
+          onCancel={onCloseVisualize}
+          onSelect={onVectorFieldSelected}
+        />
+      )}
     </S.ContentArea>
   )
 }
