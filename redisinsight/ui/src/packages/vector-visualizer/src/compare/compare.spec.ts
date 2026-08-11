@@ -91,7 +91,7 @@ describe('compare contracts', () => {
     ).toEqual(
       expect.objectContaining({
         requiresConfirmation: true,
-        commands: ['VSIM TRUTH'],
+        commands: ['VSIM', 'TRUTH'],
         estimatedWork: '50 bounded comparisons',
       }),
     )

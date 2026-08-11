@@ -1071,6 +1071,7 @@
   "vectorVisualizer.clusterLabels.options.top12": "Top 12",
   "vectorVisualizer.clusterLabels.options.top25": "Top 25",
   "vectorVisualizer.clusterLabels.options.top5": "Top 5",
+  "vectorVisualizer.common.none": "None",
   "vectorVisualizer.common.unknown": "Unknown",
   "vectorVisualizer.controls.clusterLabelLimit.label": "Cluster label limit",
   "vectorVisualizer.controls.clusterLabels.disabledReason": "Choose a returned categorical field with at least two values to show cluster labels.",

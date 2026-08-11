@@ -165,7 +165,7 @@ describe('CompareTune', () => {
       screen.getByRole('button', { name: 'Preview truth benchmark' }),
     )
     expect(screen.getByText('4 bounded comparisons')).toBeInTheDocument()
-    expect(screen.getByText('VSIM TRUTH')).toBeInTheDocument()
+    expect(screen.getByText('VSIM, TRUTH')).toBeInTheDocument()
 
     rerender(
       <ThemeProvider>

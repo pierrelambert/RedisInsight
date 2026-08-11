@@ -10,6 +10,9 @@
     "test": "node ../../../../../node_modules/.bin/jest -c jest.config.cjs",
     "typecheck": "node ../../../../../node_modules/.bin/tsc --project tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "umap-js": "1.4.0"
+  },
   "visualizations": [
     {
       "id": "ri-vector-visualizer",

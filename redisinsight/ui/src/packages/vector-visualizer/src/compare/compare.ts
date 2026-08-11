@@ -412,7 +412,9 @@ export const buildBenchmarkPreview = ({
   sampleCount,
 }: BenchmarkPreviewInput) => ({
   commands: truth
-    ? [sourceKind === 'vector-set' ? 'VSIM TRUTH' : 'FT.SEARCH KNN']
+    ? sourceKind === 'vector-set'
+      ? ['VSIM', 'TRUTH']
+      : ['FT.SEARCH KNN']
     : [],
   requiresConfirmation: truth,
   estimatedWork: `${sampleCount} bounded comparisons`,

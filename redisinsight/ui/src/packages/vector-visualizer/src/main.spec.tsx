@@ -29,7 +29,11 @@ describe('renderVectorVisualizer', () => {
     expect(document.body.textContent).toContain('PARAMS [redacted]')
     expect(document.body.textContent).not.toContain('secret-vector')
     expect(document.body.textContent).not.toContain('private-vector')
-    expect(console.error).not.toHaveBeenCalled()
+    const errorCalls = (console.error as jest.Mock).mock.calls.filter(
+      ([msg]: [unknown]) =>
+        typeof msg !== 'string' || !msg.includes('ReactDOMTestUtils.act'),
+    )
+    expect(errorCalls).toHaveLength(0)
   })
 
   it('renders empty, failed, and unsupported states instead of a blank iframe', () => {
