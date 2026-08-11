@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { FixedSizeList, type ListChildComponentProps } from 'react-window'
 import styled from 'styled-components'
 
@@ -6,6 +6,7 @@ import { Button } from 'uiSrc/components/base/forms/buttons'
 import { Col, Row } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 import { PluginsThemeContext } from 'uiSrc/components/base/utils/pluginsThemeContext'
+import { useTranslation } from 'uiSrc/i18n'
 import apiService from 'uiSrc/services/apiService'
 import {
   cliSettingsSelector,
@@ -82,16 +83,26 @@ import { VectorVisualizerWorkspace } from './components/VectorVisualizerWorkspac
 const DEFAULT_SAMPLE_BUDGET = 2_000
 const MIN_SAMPLE_BUDGET = 500
 const MAX_SAMPLE_BUDGET = 20_000
+const MAX_HEALTH_SAMPLE_SIZE = 200
 const UMAP_SEED = 42
 const NATIVE_QUERY_LIMIT = 50
 const MIN_CLUSTER_LABEL_COUNT = 2
 const DEFAULT_CLUSTER_LABEL_LIMIT = 'top-12'
 const CLUSTER_LABEL_LIMIT_OPTIONS = [
-  { label: 'Off', value: 'off' },
-  { label: 'Top 5', value: 'top-5' },
-  { label: 'Top 12', value: DEFAULT_CLUSTER_LABEL_LIMIT },
-  { label: 'Top 25', value: 'top-25' },
-  { label: 'All visible', value: 'all' },
+  { labelKey: 'vectorVisualizer.clusterLabels.options.off', value: 'off' },
+  { labelKey: 'vectorVisualizer.clusterLabels.options.top5', value: 'top-5' },
+  {
+    labelKey: 'vectorVisualizer.clusterLabels.options.top12',
+    value: DEFAULT_CLUSTER_LABEL_LIMIT,
+  },
+  {
+    labelKey: 'vectorVisualizer.clusterLabels.options.top25',
+    value: 'top-25',
+  },
+  {
+    labelKey: 'vectorVisualizer.clusterLabels.options.allVisible',
+    value: 'all',
+  },
 ] as const
 const CLUSTER_LABEL_MIN_HORIZONTAL_SEPARATION = 0.12
 const CLUSTER_LABEL_MIN_VERTICAL_SEPARATION = 0.08
@@ -173,12 +184,12 @@ const ModeHeader = styled(Row)`
     theme.semantic.color.background.neutral100};
 `
 
-const workflows: Array<{ id: NativeVisualizerWorkflow; label: string }> = [
-  { id: 'explore', label: 'Explore' },
-  { id: 'query-lab', label: 'Query Lab' },
-  { id: 'health', label: 'Health' },
-  { id: 'compare-tune', label: 'Compare & Tune' },
-  { id: 'advanced', label: 'Advanced' },
+const workflows: NativeVisualizerWorkflow[] = [
+  'explore',
+  'query-lab',
+  'health',
+  'compare-tune',
+  'advanced',
 ]
 
 type NativePageStatus =
@@ -212,21 +223,6 @@ const emptyQuery: Pick<
   profile: { kind: 'none' as const, facts: {} },
 }
 
-const statusCopy: Record<NativePageStatus, string> = {
-  'ready-not-sampled': 'Ready to collect bounded read-only evidence.',
-  fetching: 'Sampling vectors with an explicit bounded read-only request.',
-  layouting: 'Running seeded local UMAP projection.',
-  ready: 'Sample and local projection are ready.',
-  partial: 'Partial sample: invalid or missing vectors were not plotted.',
-  empty: 'No vectors were returned for this bounded sample.',
-  unsupported: 'This source or vector field is unavailable for sampling.',
-  'acl-unavailable': 'Redis ACLs do not allow this sampling capability.',
-  cancelled: 'Sampling was cancelled and raw vectors were cleared from memory.',
-  stale: 'A newer source or sampling request replaced this result.',
-  'recoverable-error':
-    'Sampling could not complete. Retry the explicit sample action.',
-}
-
 const unknownEvidence = {
   kind: 'unknown' as const,
   reason: 'missing-original-space-neighbor-evidence' as const,
@@ -258,30 +254,32 @@ const toPageSample = (
   }
 }
 
-const NativeExecutionUnavailable = ({ workflow }: { workflow: string }) => (
-  <Col gap="l">
-    <Text color="subdued" role="status">
-      {workflow} is unavailable until this native workspace has response-backed
-      evidence.
-    </Text>
-    <Text color="subdued">
-      No command is issued for unavailable evidence, and no metrics or manifests
-      are fabricated.
-    </Text>
-  </Col>
-)
+const NativeExecutionUnavailable = ({ workflow }: { workflow: string }) => {
+  const { t } = useTranslation()
+  return (
+    <Col gap="l">
+      <Text color="subdued" role="status">
+        {t('vectorVisualizer.workflows.unavailable', { workflow })}
+      </Text>
+      <Text color="subdued">
+        {t('vectorVisualizer.workflows.unavailableEvidence')}
+      </Text>
+    </Col>
+  )
+}
 
 const SampleSelection = ({
   sampleIds,
   selectedIds,
   onSelectedIdsChange,
-  description = 'Selection exposes IDs only until response-backed original-space evidence is available.',
+  description,
 }: {
   sampleIds: string[]
   selectedIds: string[]
   onSelectedIdsChange(ids: string[]): void
   description?: string
 }) => {
+  const { t } = useTranslation()
   const { theme } = useContext(PluginsThemeContext)
   const rowHeightToken = theme.core.space.space400
   const rootFontSize = Number.parseFloat(
@@ -295,12 +293,21 @@ const SampleSelection = ({
   const rowData = { sampleIds, selectedIds, onSelectedIdsChange }
   return (
     <Col gap="m">
-      <Text aria-live="polite" aria-label="Selected IDs" role="status">
-        Selected IDs: {selectedIds.length ? selectedIds.join(', ') : 'None'}
+      <Text
+        aria-live="polite"
+        aria-label={t('vectorVisualizer.selection.selectedIds')}
+        role="status"
+      >
+        {t('vectorVisualizer.selection.selectedIds')}:{' '}
+        {selectedIds.length
+          ? selectedIds.join(', ')
+          : t('vectorVisualizer.common.none')}
       </Text>
-      <Text color="subdued">{description}</Text>
+      <Text color="subdued">
+        {description ?? t('vectorVisualizer.selection.idsOnly')}
+      </Text>
       <div
-        aria-label="Virtualized sampled ID selection"
+        aria-label={t('vectorVisualizer.selection.virtualizedSampledIds')}
         aria-rowcount={sampleIds.length}
         role="list"
       >
@@ -324,12 +331,12 @@ const SampleSelection = ({
                   {id}
                 </Text>
                 <Button
-                  aria-label={`Select ${id}`}
+                  aria-label={t('vectorVisualizer.selection.selectId', { id })}
                   aria-pressed={selected}
                   size="s"
                   onClick={() => data.onSelectedIdsChange([id])}
                 >
-                  Inspect ID
+                  {t('vectorVisualizer.selection.inspectId')}
                 </Button>
               </Row>
             )
@@ -357,12 +364,12 @@ const Explore = ({
   clusterLabelLimit: ClusterLabelLimit
   mode?: 'atlas' | 'selection'
 }) => {
+  const { t } = useTranslation()
   const { theme } = useContext(PluginsThemeContext)
   if (!sample)
     return (
       <Text color="subdued" role="status">
-        Explore is ready. Choose Sample vectors to collect a bounded local
-        projection; no command runs automatically.
+        {t('vectorVisualizer.explore.readyNotSampled')}
       </Text>
     )
   const { result } = sample
@@ -442,10 +449,10 @@ const Explore = ({
       <Atlas
         title={
           mode === 'selection'
-            ? 'Selected region'
+            ? t('vectorVisualizer.atlas.title.selection')
             : result.source.kind === 'search-index'
-              ? 'Index atlas'
-              : 'Vector set atlas'
+              ? t('vectorVisualizer.atlas.title.index')
+              : t('vectorVisualizer.atlas.title.vectorSet')
         }
         coordinates={sample.coordinates}
         sampleIds={result.ids}
@@ -505,6 +512,7 @@ const Health = ({
     robustDeviationThreshold: number
   }): void
 }) => {
+  const { t } = useTranslation()
   const records = (sample?.result.records ?? [])
     .filter((record) => evidence?.sampleIds.includes(record.id))
     .map(({ id, metadata }) => ({ id, metadata }))
@@ -567,8 +575,8 @@ const Health = ({
         <Text color="subdued">
           Exact original-space {evidence.pairMeasure} and{' '}
           {evidence.neighborDistanceMeasure} evidence is capped to{' '}
-          {evidence.sampleIds.length} sampled records (maximum 200); the full
-          Atlas is never compared pairwise.
+          {evidence.sampleIds.length} sampled records (maximum{' '}
+          {MAX_HEALTH_SAMPLE_SIZE}); the full Atlas is never compared pairwise.
         </Text>
       )}
       <DuplicateExplorer
@@ -586,34 +594,40 @@ const Health = ({
           sampleIds={records.map(({ id }) => id)}
           selectedIds={selectedIds}
           onSelectedIdsChange={onSelectedIdsChange}
-          description="Health candidate selection is linked to the shared sampled-record inspector."
+          description={t('vectorVisualizer.health.selectionDescription')}
         />
       )}
-      <Col gap="xs" aria-label="Health selected record inspector">
+      <Col
+        gap="xs"
+        aria-label={t('vectorVisualizer.health.selectedRecordInspector')}
+      >
         <Title component="h2" size="S">
-          Selected Health evidence
+          {t('vectorVisualizer.health.selectedEvidence')}
         </Title>
         {selectedRecords.length ? (
           selectedRecords.map(({ id, metadata }) => (
             <Col gap="xs" key={id}>
               <Text>{id}</Text>
-              <Text color="subdued" aria-label="Health candidate rule">
+              <Text
+                color="subdued"
+                aria-label={t('vectorVisualizer.health.candidateRule')}
+              >
                 {duplicateIds.includes(id)
-                  ? `${duplicateEvidence.kind === 'known' ? duplicateEvidence.formula : 'Duplicate rule unavailable'}; threshold ${duplicateThreshold}; bounded sample ${evidence?.sampleIds.length ?? 0}; freshness ${evidence?.freshness ?? 'unknown'}.`
+                  ? `${duplicateEvidence.kind === 'known' ? duplicateEvidence.formula : t('vectorVisualizer.health.duplicateRuleUnavailable')}; threshold ${duplicateThreshold}; bounded sample ${evidence?.sampleIds.length ?? 0}; freshness ${evidence?.freshness ?? 'unknown'}.`
                   : outlierIds.includes(id)
-                    ? `${outlierEvidence.kind === 'known' ? outlierEvidence.formula : 'Outlier rule unavailable'}; k=${evidence?.k ?? 'unknown'}; exactness ${evidence?.exactness ?? 'unknown'}; freshness ${evidence?.freshness ?? 'unknown'}.`
-                    : 'Selected sampled record; no duplicate or outlier candidate rule applies.'}
+                    ? `${outlierEvidence.kind === 'known' ? outlierEvidence.formula : t('vectorVisualizer.health.outlierRuleUnavailable')}; k=${evidence?.k ?? 'unknown'}; exactness ${evidence?.exactness ?? 'unknown'}; freshness ${evidence?.freshness ?? 'unknown'}.`
+                    : t('vectorVisualizer.health.noCandidateRule')}
               </Text>
               <Text color="subdued">
-                Metadata fields:{' '}
-                {Object.keys(metadata ?? {}).join(', ') || 'none'}
+                {t('vectorVisualizer.health.metadataFields')}:{' '}
+                {Object.keys(metadata ?? {}).join(', ') ||
+                  t('vectorVisualizer.common.none')}
               </Text>
             </Col>
           ))
         ) : (
           <Text color="subdued" role="status">
-            Select a duplicate group, outlier candidate, or sampled record to
-            inspect its rule and provenance.
+            {t('vectorVisualizer.health.selectToInspect')}
           </Text>
         )}
       </Col>
@@ -622,6 +636,7 @@ const Health = ({
 }
 
 export const VectorVisualizerPage = () => {
+  const { t } = useTranslation()
   const [source, setSource] = useState<VectorDataSourceRef>()
   const dispatch = useAppDispatch()
   const connectedInstance = useAppSelector(connectedInstanceSelector)
@@ -679,6 +694,34 @@ export const VectorVisualizerPage = () => {
     topology: ReturnType<typeof parseVlinksTopology>
   }>({ status: 'ready', topology: { kind: 'unsupported' } })
 
+  const statusCopy = useMemo<Record<NativePageStatus, string>>(
+    () => ({
+      'ready-not-sampled': t('vectorVisualizer.status.readyNotSampled'),
+      fetching: t('vectorVisualizer.status.fetching'),
+      layouting: t('vectorVisualizer.status.layouting'),
+      ready: t('vectorVisualizer.status.ready'),
+      partial: t('vectorVisualizer.status.partial'),
+      empty: t('vectorVisualizer.status.empty'),
+      unsupported: t('vectorVisualizer.status.unsupported'),
+      'acl-unavailable': t('vectorVisualizer.status.aclUnavailable'),
+      cancelled: t('vectorVisualizer.status.cancelled'),
+      stale: t('vectorVisualizer.status.stale'),
+      'recoverable-error': t('vectorVisualizer.status.recoverableError'),
+    }),
+    [t],
+  )
+
+  const workflowLabels = useMemo<Record<NativeVisualizerWorkflow, string>>(
+    () => ({
+      explore: t('vectorVisualizer.workflows.explore'),
+      'query-lab': t('vectorVisualizer.workflows.queryLab'),
+      health: t('vectorVisualizer.workflows.health'),
+      'compare-tune': t('vectorVisualizer.workflows.compareTune'),
+      advanced: t('vectorVisualizer.workflows.advanced'),
+    }),
+    [t],
+  )
+
   useEffect(() => {
     const nextSource = consumeVectorVisualizerSource()
     if (!nextSource) return
@@ -718,12 +761,9 @@ export const VectorVisualizerPage = () => {
     return (
       <Col gap="m" data-testid="vector-visualizer-source-missing">
         <Title component="h1" size="M">
-          Vector Visualizer
+          {t('vectorVisualizer.page.title')}
         </Title>
-        <Text>
-          Select Visualize from a Search index or Vector Set to open a
-          workspace.
-        </Text>
+        <Text>{t('vectorVisualizer.page.sourceMissing')}</Text>
       </Col>
     )
   }
@@ -872,7 +912,7 @@ export const VectorVisualizerPage = () => {
       setStatus(result.kind === 'partial' ? 'partial' : 'ready')
       if (result.metric !== 'unknown') {
         setDuplicateThreshold(defaultDuplicateThresholdForMetric(result.metric))
-        const healthIds = result.ids.slice(0, 200)
+        const healthIds = result.ids.slice(0, MAX_HEALTH_SAMPLE_SIZE)
         const healthVectors = new Float32Array(
           healthIds.length * result.dimensions,
         )
@@ -887,7 +927,7 @@ export const VectorVisualizerPage = () => {
             vectors: healthVectors,
             dimensions: result.dimensions,
             metric: result.metric,
-            maxSampleSize: 200,
+            maxSampleSize: MAX_HEALTH_SAMPLE_SIZE,
             k: DEFAULT_OUTLIER_CANDIDATE_CONFIG.k,
             freshness:
               result.freshness === 'changed-while-sampled'
@@ -1201,27 +1241,26 @@ export const VectorVisualizerPage = () => {
           disabled={!selectedIds[0] || !sample}
           onClick={() => void runQuery()}
         >
-          Run selected anchor query
+          {t('vectorVisualizer.queryLab.runSelectedAnchorQuery')}
         </Button>
         <Text color="subdued">
-          Runs one bounded read-only{' '}
-          {sourceKind === 'search-index' ? 'KNN' : 'VSIM'} request only after a
-          sampled point is selected.
+          {t('vectorVisualizer.queryLab.runDescription', {
+            command: sourceKind === 'search-index' ? 'KNN' : 'VSIM',
+          })}
         </Text>
         {!sample ? (
           <Text role="status">
-            Query Lab is ready. Sample vectors first, then select a document to
-            run a bounded neighbor query.
+            {t('vectorVisualizer.queryLab.readyNotSampled')}
           </Text>
         ) : !selectedIds[0] ? (
           <Text role="status">
-            Select a sampled document in Atlas or the results inspector to
-            enable Query Lab.
+            {t('vectorVisualizer.queryLab.selectDocument')}
           </Text>
         ) : query.status === 'ready-not-sampled' ? (
           <Text role="status">
-            Query Lab is waiting for an explicit neighbor query for{' '}
-            {selectedIds[0]}.
+            {t('vectorVisualizer.queryLab.waitingForQuery', {
+              id: selectedIds[0],
+            })}
           </Text>
         ) : undefined}
         <QueryLab
@@ -1268,19 +1307,19 @@ export const VectorVisualizerPage = () => {
       />
     ) : workflow === 'compare-tune' ? (
       !sample ? (
-        <NativeExecutionUnavailable workflow="Compare & Tune" />
+        <NativeExecutionUnavailable workflow={workflowLabels['compare-tune']} />
       ) : sample.result.metric === 'unknown' ? (
         <Text role="status">
-          Compare & Tune is unavailable until the source returns a compatible
-          metric.
+          {t('vectorVisualizer.compareTune.metricUnavailable')}
         </Text>
       ) : manifests.length < 2 ? (
         <Col gap="m">
           <Text role="status">
-            Save two compatible response-backed local sample manifests to
-            compare them.
+            {t('vectorVisualizer.compareTune.needManifests')}
           </Text>
-          <Button onClick={saveManifest}>Save local sample manifest</Button>
+          <Button onClick={saveManifest}>
+            {t('vectorVisualizer.compareTune.saveManifest')}
+          </Button>
         </Col>
       ) : (
         <CompareTune
@@ -1300,7 +1339,7 @@ export const VectorVisualizerPage = () => {
             disabled={!selectedIds[0]}
             onClick={() => void loadTopology()}
           >
-            Load selected VLINKS topology
+            {t('vectorVisualizer.advanced.loadSelectedTopology')}
           </Button>
         )}
         <Advanced
@@ -1317,8 +1356,8 @@ export const VectorVisualizerPage = () => {
 
   const sourceLabel =
     source.kind === 'search-index'
-      ? `Search index ${source.index}`
-      : 'Selected Vector Set'
+      ? t('vectorVisualizer.source.searchIndex', { index: source.index })
+      : t('vectorVisualizer.source.vectorSet')
   const availableMetadataFields = Array.from(
     new Set([
       ...(sample?.result.availableMetadataFields ?? []),
@@ -1342,10 +1381,10 @@ export const VectorVisualizerPage = () => {
   )
   const sampleFreshnessLabel =
     sample?.result.freshness === 'changed-while-sampled'
-      ? 'Changed while sampled'
+      ? t('vectorVisualizer.sampleFreshness.changed')
       : sample
-        ? 'Fresh sample'
-        : 'Not sampled'
+        ? t('vectorVisualizer.sampleFreshness.fresh')
+        : t('vectorVisualizer.sampleFreshness.notSampled')
   const sampledResultRows: SelectionRow[] =
     sample?.result.ids.map((id, index) => ({
       id,
@@ -1404,24 +1443,25 @@ export const VectorVisualizerPage = () => {
         : 'sampled'
   const inspectorProvenance = usesQueryResults
     ? query.neighbors[0]
-      ? `Bounded read-only ${query.neighbors[0].provenance} response`
-      : 'No response-backed neighbor evidence is available yet.'
+      ? t('vectorVisualizer.results.provenance.query', {
+          provenance: query.neighbors[0].provenance,
+        })
+      : t('vectorVisualizer.results.provenance.noNeighborEvidence')
     : sampledFilterExpression
-      ? [
-          'Bounded sampled Redis response filtered by',
-          `${sampledFilterExpression}; score is unavailable until a query runs.`,
-        ].join(' ')
-      : 'Bounded sampled Redis response; score is unavailable until a query runs.'
+      ? t('vectorVisualizer.results.provenance.filtered', {
+          filter: sampledFilterExpression,
+        })
+      : t('vectorVisualizer.results.provenance.sampled')
   const visualizationActions = [
     {
       id: 'run-neighbors',
-      label: 'Run neighbors for selected',
+      label: t('vectorVisualizer.actions.runNeighborsForSelected'),
       disabled: selectedIds.length !== 1 || !sample,
       onClick: () => runNeighborsForSelected(selectedIds[0]),
     },
     {
       id: 'clear-selection',
-      label: 'Clear selection',
+      label: t('vectorVisualizer.actions.clearSelection'),
       disabled: !selectedIds.length,
       onClick: () => setSelectedIds([]),
     },
@@ -1477,7 +1517,7 @@ export const VectorVisualizerPage = () => {
       <NativeHeader align="center" gap="m" justify="between" wrap>
         <Col gap="xs">
           <Title component="h1" size="M">
-            Vector Visualizer
+            {t('vectorVisualizer.page.title')}
           </Title>
           <Row
             align="center"
@@ -1487,8 +1527,11 @@ export const VectorVisualizerPage = () => {
           >
             <Text component="span" size="S">
               {source.kind === 'search-index'
-                ? `Source ready: Search index ${source.index}, vector field ${source.vectorField}.`
-                : 'Source ready: Vector Set key selected.'}
+                ? t('vectorVisualizer.page.searchSourceReady', {
+                    index: source.index,
+                    vectorField: source.vectorField,
+                  })
+                : t('vectorVisualizer.page.vectorSetSourceReady')}
             </Text>
             <Text color="subdued" component="span" size="S">
               {sampleFreshnessLabel}
@@ -1497,7 +1540,9 @@ export const VectorVisualizerPage = () => {
               {statusCopy[status]}
             </Text>
             <Text component="span" size="S">
-              {selectedIds.length} selected
+              {t('vectorVisualizer.page.selectedCount', {
+                count: selectedIds.length,
+              })}
             </Text>
           </Row>
         </Col>
@@ -1511,16 +1556,16 @@ export const VectorVisualizerPage = () => {
             }
             onClick={() => void sampleVectors()}
           >
-            Sample vectors
+            {t('vectorVisualizer.actions.sampleVectors')}
           </Button>
           <Button
             disabled={status !== 'fetching' && status !== 'layouting'}
             onClick={cancel}
           >
-            Cancel
+            {t('vectorVisualizer.actions.cancel')}
           </Button>
           <Text color="subdued" size="S">
-            No Redis command is run when this workspace opens.
+            {t('vectorVisualizer.page.noCommandOnOpen')}
           </Text>
         </Row>
       </NativeHeader>
@@ -1537,19 +1582,19 @@ export const VectorVisualizerPage = () => {
         />
       </ModeHeader>
       <TruthBanner role="status" size="S">
-        Atlas is a 2D projection of a bounded sample. Distances in the plot do
-        not replace response-backed source metrics.
+        {t('vectorVisualizer.page.truthBanner')}
       </TruthBanner>
       <VectorVisualizerWorkspace
         controls={
           <VectorVisualizerControls
             source={{
-              label: 'Source',
+              label: t('vectorVisualizer.controls.source.label'),
               value: sourceLabel,
               options: [{ label: sourceLabel, value: sourceLabel }],
               disabled: true,
-              disabledReason:
-                'Change the selected source from its RedisInsight entry action.',
+              disabledReason: t(
+                'vectorVisualizer.controls.source.disabledReason',
+              ),
             }}
             filter={{
               ...(sourceKind === 'search-index'
@@ -1560,15 +1605,18 @@ export const VectorVisualizerPage = () => {
                           {
                             id: 'search-filter',
                             label: isFilterDirty
-                              ? `${normalizedFilterExpression} · resample to apply`
+                              ? t(
+                                  'vectorVisualizer.controls.filter.dirtyChip',
+                                  { filter: normalizedFilterExpression },
+                                )
                               : normalizedFilterExpression,
                           },
                         ]
                       : [],
                     syntaxHelp: {
                       content: isFilterDirty
-                        ? 'Filter changed. Choose Sample vectors to apply it to the chart.'
-                        : 'RediSearch query syntax. Choose Sample vectors to apply this filter.',
+                        ? t('vectorVisualizer.controls.filter.dirtyHelp')
+                        : t('vectorVisualizer.controls.filter.syntaxHelp'),
                     },
                     onChange: setFilterExpression,
                     onRemove: () => setFilterExpression(''),
@@ -1576,14 +1624,15 @@ export const VectorVisualizerPage = () => {
                 : {
                     value: '',
                     disabled: true,
-                    disabledReason:
-                      'Filters are unavailable for Vector Set sampling.',
+                    disabledReason: t(
+                      'vectorVisualizer.controls.filter.vectorSetDisabled',
+                    ),
                   }),
             }}
             colorBy={
               availableMetadataFields.length
                 ? {
-                    label: 'Color by',
+                    label: t('vectorVisualizer.controls.colorBy.label'),
                     value: metadataField,
                     options: availableMetadataFields.map((field) => ({
                       label: field,
@@ -1592,12 +1641,13 @@ export const VectorVisualizerPage = () => {
                     onChange: setMetadataField,
                   }
                 : {
-                    label: 'Color by',
+                    label: t('vectorVisualizer.controls.colorBy.label'),
                     value: '',
                     options: [],
                     disabled: true,
-                    disabledReason:
-                      'Sample vectors to discover available scalar metadata fields.',
+                    disabledReason: t(
+                      'vectorVisualizer.controls.colorBy.disabledReason',
+                    ),
                   }
             }
             sampleBudget={{
@@ -1620,7 +1670,7 @@ export const VectorVisualizerPage = () => {
                     quality:
                       sample.quality.kind === 'measured'
                         ? String(sample.quality.value)
-                        : 'Unknown',
+                        : t('vectorVisualizer.common.unknown'),
                   }
                 : undefined
             }
@@ -1634,18 +1684,21 @@ export const VectorVisualizerPage = () => {
                   : {
                       checked: false,
                       disabled: true,
-                      disabledReason:
-                        'Choose a returned categorical field with at least two values to show cluster labels.',
+                      disabledReason: t(
+                        'vectorVisualizer.controls.clusterLabels.disabledReason',
+                      ),
                     }
                 : undefined
             }
             clusterLabelLimit={
               sample && canShowClusterLabels
                 ? {
-                    label: 'Cluster label limit',
+                    label: t(
+                      'vectorVisualizer.controls.clusterLabelLimit.label',
+                    ),
                     value: clusterLabelLimit,
                     options: CLUSTER_LABEL_LIMIT_OPTIONS.map((option) => ({
-                      label: option.label,
+                      label: t(option.labelKey),
                       value: option.value,
                     })),
                     onChange: (value) => {
@@ -1704,17 +1757,21 @@ export const VectorVisualizerPage = () => {
             setAdditionalWorkflowsOpen((open) => !open)
           }}
         >
-          Additional evidence workflows
+          {t('vectorVisualizer.workflows.additional')}
         </summary>
-        <Row aria-label="Additional evidence workflows" gap="s" wrap>
-          {workflows.slice(1).map(({ id, label }) => (
+        <Row
+          aria-label={t('vectorVisualizer.workflows.additional')}
+          gap="s"
+          wrap
+        >
+          {workflows.slice(1).map((id) => (
             <Button
               aria-pressed={workflow === id}
               key={id}
               size="s"
               onClick={() => selectWorkflow(id)}
             >
-              {label}
+              {workflowLabels[id]}
             </Button>
           ))}
         </Row>
