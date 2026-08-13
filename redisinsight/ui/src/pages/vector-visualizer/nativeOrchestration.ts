@@ -14,7 +14,6 @@ import {
   planProfileSearchNeighbors,
   parseSearchInfo,
   parseAllowListedSearchMetadata,
-  planSearchNeighbors,
   parseSearchSample,
   planSearchDiscovery,
   planSearchSample,
@@ -233,23 +232,22 @@ const sampleSearch = async (input: SearchSamplingInput) => {
   const field = discovery.vectorFields.find(
     (candidate) => candidate.name === input.source.vectorField,
   )
-  if (
-    !field ||
-    !field.dimensions ||
-    !field.metric ||
-    (field.dataType !== 'FLOAT32' && field.dataType !== 'FLOAT64')
-  )
+  const VECTOR_ELEMENT_BYTES: Record<string, number> = {
+    FLOAT64: 8,
+    FLOAT32: 4,
+    FLOAT16: 2,
+    BFLOAT16: 2,
+    INT8: 1,
+    UINT8: 1,
+  }
+  const elementBytes = VECTOR_ELEMENT_BYTES[field?.dataType ?? '']
+  if (!field || !field.dimensions || !field.metric || !elementBytes)
     return result(input, SEARCH_CAPABILITIES, {
       partialReason: 'selected-vector-field-unavailable',
       commandCount,
     })
 
-  validateBudget(
-    field.dimensions,
-    field.dataType === 'FLOAT32' ? 4 : 8,
-    3,
-    input,
-  )
+  validateBudget(field.dimensions, elementBytes, 3, input)
   const selectedMetadataFields = [
     ...new Set([
       ...discovery.metadataFields,
@@ -555,7 +553,8 @@ const normalizeProfile = (
       const name =
         asText(stage.Type) ?? asText(stage.Name) ?? asText(stage.Iterator)
       if (!name) return undefined
-      const count = stage.Counter ?? stage.Count ?? stage['Number of reading operations']
+      const count =
+        stage.Counter ?? stage.Count ?? stage['Number of reading operations']
       return {
         name,
         count: count !== undefined ? String(count) : undefined,

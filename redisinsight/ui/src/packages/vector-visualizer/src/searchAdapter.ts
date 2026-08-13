@@ -197,26 +197,74 @@ const decodeRawVectorBytes = (raw: unknown): Uint8Array | undefined => {
   return new Uint8Array(bytes)
 }
 
+const VECTOR_ELEMENT_BYTES: Record<string, number> = {
+  FLOAT64: 8,
+  FLOAT32: 4,
+  FLOAT16: 2,
+  BFLOAT16: 2,
+  INT8: 1,
+  UINT8: 1,
+}
+
+const decodeBFloat16 = (bits: number): number => {
+  const sign = (bits >> 15) & 1
+  const exponent = (bits >> 7) & 0xff
+  const mantissa = bits & 0x7f
+  const float32Bits = (sign << 31) | (exponent << 23) | (mantissa << 16)
+  const buf = new ArrayBuffer(4)
+  new DataView(buf).setUint32(0, float32Bits, false)
+  return new DataView(buf).getFloat32(0, false)
+}
+
+const decodeFloat16 = (bits: number): number => {
+  const sign = (bits >> 15) & 1
+  const exponent = (bits >> 10) & 0x1f
+  const mantissa = bits & 0x3ff
+  if (exponent === 0) {
+    return (sign ? -1 : 1) * 2 ** -14 * (mantissa / 1024)
+  }
+  if (exponent === 0x1f) {
+    return mantissa === 0 ? (sign ? -Infinity : Infinity) : NaN
+  }
+  return (sign ? -1 : 1) * 2 ** (exponent - 15) * (1 + mantissa / 1024)
+}
+
+const readElement = (
+  view: DataView,
+  offset: number,
+  dataType: string,
+): number => {
+  switch (dataType) {
+    case 'FLOAT64':
+      return view.getFloat64(offset, true)
+    case 'FLOAT32':
+      return view.getFloat32(offset, true)
+    case 'FLOAT16':
+      return decodeFloat16(view.getUint16(offset, true))
+    case 'BFLOAT16':
+      return decodeBFloat16(view.getUint16(offset, true))
+    case 'INT8':
+      return view.getInt8(offset)
+    case 'UINT8':
+      return view.getUint8(offset)
+    default:
+      return NaN
+  }
+}
+
 const decodeSearchVector = (
   value: unknown,
   field: SearchSampleField,
 ): Float32Array | undefined => {
-  if (
-    field.dimensions === undefined ||
-    field.dimensions <= 0 ||
-    (field.dataType !== 'FLOAT32' && field.dataType !== 'FLOAT64')
-  )
-    return undefined
+  if (field.dimensions === undefined || field.dimensions <= 0) return undefined
+  const width = VECTOR_ELEMENT_BYTES[field.dataType ?? '']
+  if (!width) return undefined
   const bytes = decodeRawVectorBytes(value)
-  const width = field.dataType === 'FLOAT32' ? 4 : 8
   if (!bytes || bytes.byteLength !== field.dimensions * width) return undefined
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const values = new Float32Array(field.dimensions)
   for (let index = 0; index < field.dimensions; index += 1) {
-    const valueAtIndex =
-      field.dataType === 'FLOAT32'
-        ? view.getFloat32(index * width, true)
-        : view.getFloat64(index * width, true)
+    const valueAtIndex = readElement(view, index * width, field.dataType!)
     if (!Number.isFinite(valueAtIndex)) return undefined
     values[index] = valueAtIndex
   }
