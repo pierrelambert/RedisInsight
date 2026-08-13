@@ -615,8 +615,13 @@ const normalizeProfile = (
       }
     })
     .filter(
-      (s): s is { name: string; count?: string; mode?: string } =>
-        s !== undefined,
+      (
+        s,
+      ): s is {
+        name: string
+        count: string | undefined
+        mode: string | undefined
+      } => s !== undefined,
     )
   return { kind: 'full', facts, stages }
 }

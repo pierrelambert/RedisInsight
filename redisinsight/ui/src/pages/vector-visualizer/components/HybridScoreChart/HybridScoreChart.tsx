@@ -25,7 +25,9 @@ const RAMP_BLUE_RANGE = 75
  * the x-axis, vector_score on the y-axis, and hybrid_score encoded as dot
  * color intensity. No external charting library is used.
  */
-const HybridScoreChart: React.FC<HybridScoreChartProps> = ({ documents }) => {
+export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
+  documents,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -124,5 +126,3 @@ const HybridScoreChart: React.FC<HybridScoreChartProps> = ({ documents }) => {
     </S.ChartFrame>
   )
 }
-
-export default HybridScoreChart

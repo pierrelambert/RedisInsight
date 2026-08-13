@@ -14,7 +14,9 @@ export const Panel = styled(Col)`
   background: ${({ theme }) => theme.semantic.color.background.neutral100};
 `
 
-export const Entry = styled.button<{ $dimmed?: boolean }>`
+export const Entry = styled.button.attrs({ type: 'button' as const })<{
+  $dimmed?: boolean
+}>`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.core.space.space075};

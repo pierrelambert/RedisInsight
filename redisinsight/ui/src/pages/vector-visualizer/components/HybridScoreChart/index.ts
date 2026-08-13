@@ -1,4 +1,4 @@
-export { default as HybridScoreChart } from './HybridScoreChart'
+export { HybridScoreChart } from './HybridScoreChart'
 export type {
   HybridScoreChartDocument,
   HybridScoreChartProps,

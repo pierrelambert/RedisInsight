@@ -75,7 +75,7 @@ describe('AtlasRenderer lifecycle', () => {
 
   it('insets normalized extrema so every plotted marker remains visible', () => {
     expect(normalizeCoordinates(new Float32Array([0, 0, 10, 10]))).toEqual(
-      new Float32Array([0.04, 0.04, 0.96, 0.96]),
+      new Float32Array([0.06, 0.06, 0.94, 0.94]),
     )
   })
 

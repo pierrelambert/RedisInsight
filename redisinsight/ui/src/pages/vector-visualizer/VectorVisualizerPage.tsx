@@ -18,7 +18,6 @@ import { parseVlinksTopology } from 'uiSrc/packages/vector-visualizer/src/advanc
 import {
   Advanced,
   Atlas,
-  AtlasLegend,
   CompareTune,
   DuplicateExplorer,
   OutlierExplorer,
@@ -450,7 +449,10 @@ const Explore = ({
       let total = 0
       for (const [v, c] of vc) {
         total += c
-        if (c > topCount) { topCount = c; topVal = v }
+        if (c > topCount) {
+          topCount = c
+          topVal = v
+        }
       }
       const pct = Math.round((topCount / total) * 100)
       clusterDominant.set(cid, `${topVal} (${pct}%)`)
@@ -485,18 +487,16 @@ const Explore = ({
         return color ? [[id, color]] : []
       }),
     )
-    legendEntries = [...clusterColorMap.entries()].map(
-      ([clusterId, color]) => {
-        const dominant = clusterDominant.get(clusterId)
-        return {
-          label: dominant
-            ? `Cluster ${clusterId} · ${dominant}`
-            : `Cluster ${clusterId}`,
-          color,
-          count: clusterCounts.get(clusterId) ?? 0,
-        }
-      },
-    )
+    legendEntries = [...clusterColorMap.entries()].map(([clusterId, color]) => {
+      const dominant = clusterDominant.get(clusterId)
+      return {
+        label: dominant
+          ? `Cluster ${clusterId} · ${dominant}`
+          : `Cluster ${clusterId}`,
+        color,
+        count: clusterCounts.get(clusterId) ?? 0,
+      }
+    })
     const noiseCount = result.ids.filter(
       (_, i) => dbscan.assignments[i] < 0,
     ).length
@@ -961,7 +961,9 @@ export const VectorVisualizerPage = () => {
     setDensityGridSize(gridSize)
 
     const epsilon = autoEpsilon(normalized, count, DBSCAN_K)
-    setDbscanResult(computeDBSCAN(normalized, count, epsilon, DBSCAN_MIN_POINTS))
+    setDbscanResult(
+      computeDBSCAN(normalized, count, epsilon, DBSCAN_MIN_POINTS),
+    )
   }, [sample])
 
   useEffect(() => {

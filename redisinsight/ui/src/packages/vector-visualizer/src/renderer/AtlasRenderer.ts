@@ -728,8 +728,6 @@ export const normalizeCoordinates = (coordinates: Float32Array) => {
   }
   const xBounds = percentileBounds(xs, 0.02, 0.98)
   const yBounds = percentileBounds(ys, 0.02, 0.98)
-  const width = xBounds.high - xBounds.low || 1
-  const height = yBounds.high - yBounds.low || 1
   return Float32Array.from(coordinates, (value, i) => {
     const { low, high } =
       i % 2 ? { low: yBounds.low, high: yBounds.high } : xBounds

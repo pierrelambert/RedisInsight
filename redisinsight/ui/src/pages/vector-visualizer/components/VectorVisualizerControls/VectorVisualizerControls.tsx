@@ -265,7 +265,11 @@ const ControlsBody = ({
         </FormField>
       </Col>
 
-      {(clusterLabels || clusterLabelLimit || outliers || densityHeatmap || mapLabels) && (
+      {(clusterLabels ||
+        clusterLabelLimit ||
+        outliers ||
+        densityHeatmap ||
+        mapLabels) && (
         <Col gap="m">
           {clusterLabels && (
             <VisibilityControl

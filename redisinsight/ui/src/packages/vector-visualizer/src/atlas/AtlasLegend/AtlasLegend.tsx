@@ -16,10 +16,9 @@ export const AtlasLegend = ({ entries, onEntryClick }: AtlasLegendProps) => {
     >
       {entries.map((entry) => (
         <S.Entry
-          $dimmed={entry.dimmed}
+          $dimmed={entry.dimmed ?? false}
           aria-label={`${entry.label}${entry.count !== undefined ? ` (${entry.count})` : ''}`}
           key={entry.label}
-          type="button"
           onClick={() => onEntryClick?.(entry.label)}
         >
           <S.Swatch $color={entry.color} aria-hidden="true" />

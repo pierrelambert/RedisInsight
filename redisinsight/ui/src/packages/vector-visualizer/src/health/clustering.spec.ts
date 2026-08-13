@@ -2,7 +2,6 @@ import {
   autoEpsilon,
   computeDBSCAN,
   clusterCentroids,
-  DBSCANResult,
 } from './clustering'
 
 const makeCoordinates = (points: [number, number][]): Float32Array => {

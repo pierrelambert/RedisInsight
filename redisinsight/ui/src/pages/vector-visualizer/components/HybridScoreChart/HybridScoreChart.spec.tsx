@@ -4,7 +4,7 @@ import { faker } from '@faker-js/faker'
 import { ThemeProvider } from 'uiSrc/components/base/utils/pluginsThemeContext'
 import { render, screen } from 'uiSrc/utils/test-utils'
 
-import HybridScoreChart from './HybridScoreChart'
+import { HybridScoreChart } from './HybridScoreChart'
 import type { HybridScoreChartProps } from './HybridScoreChart.types'
 
 describe('HybridScoreChart', () => {
