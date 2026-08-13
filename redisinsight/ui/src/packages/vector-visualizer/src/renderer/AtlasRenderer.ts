@@ -54,10 +54,32 @@ flat out float shapeVarying;
 void main() {
   vec2 p = position * transform.x + transform.yz;
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-  gl_PointSize = pointSize;
+  float selected = floor(mod(marker / 4.0, 2.0));
+  gl_PointSize = pointSize * (1.0 + selected * 0.6);
   pointColorVarying = pointColor;
   accentColorVarying = accentColor;
   shapeVarying = marker;
+}`
+
+const DENSITY_VERTEX_SOURCE = `#version 300 es
+in vec2 position;
+uniform vec3 transform;
+out vec2 texCoord;
+void main() {
+  vec2 p = position * transform.x + transform.yz;
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+  texCoord = position;
+}`
+
+const DENSITY_FRAGMENT_SOURCE = `#version 300 es
+precision highp float;
+in vec2 texCoord;
+uniform sampler2D densityMap;
+out vec4 fragmentColor;
+void main() {
+  float density = texture(densityMap, texCoord).r;
+  if (density < 0.05) discard;
+  fragmentColor = vec4(0.2, 0.4, 0.8, density * 0.6);
 }`
 
 const CLICK_DRAG_THRESHOLD = 4
@@ -119,6 +141,16 @@ export class AtlasRenderer {
     isSelecting: boolean
   }
 
+  private densityProgram: WebGLProgram | null = null
+
+  private densityBuffer: WebGLBuffer | null = null
+
+  private densityTexture: WebGLTexture | null = null
+
+  private densityVisible = false
+
+  private densityGridSize = 0
+
   private readonly listeners: Array<{ type: string; listener: EventListener }> =
     []
 
@@ -164,6 +196,43 @@ export class AtlasRenderer {
     this.draw()
   }
 
+  setDensityGrid(grid: Float32Array, gridSize: number): void {
+    const gl = this.gl
+    if (!gl) return
+    if (!this.densityTexture) {
+      this.densityTexture = gl.createTexture()
+    }
+    this.densityGridSize = gridSize
+    gl.bindTexture(gl.TEXTURE_2D, this.densityTexture)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    const pixels = new Uint8Array(gridSize * gridSize)
+    for (let i = 0; i < grid.length; i += 1) {
+      pixels[i] = Math.min(255, Math.round(grid[i] * 255))
+    }
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.LUMINANCE,
+      gridSize,
+      gridSize,
+      0,
+      gl.LUMINANCE,
+      gl.UNSIGNED_BYTE,
+      pixels,
+    )
+    gl.bindTexture(gl.TEXTURE_2D, null)
+    this.draw()
+  }
+
+  setDensityVisible(visible: boolean): void {
+    this.densityVisible = visible
+    this.draw()
+  }
+
   destroy(): void {
     this.listeners.forEach(({ type, listener }) =>
       this.canvas.removeEventListener(type, listener),
@@ -174,6 +243,9 @@ export class AtlasRenderer {
     this.gl?.deleteBuffer(this.accentColorBuffer)
     this.gl?.deleteBuffer(this.markerBuffer)
     this.gl?.deleteProgram(this.program)
+    this.gl?.deleteBuffer(this.densityBuffer)
+    this.gl?.deleteProgram(this.densityProgram)
+    this.gl?.deleteTexture(this.densityTexture)
     this.gl = null
   }
 
@@ -317,6 +389,38 @@ export class AtlasRenderer {
     this.colorBuffer = gl.createBuffer()
     this.accentColorBuffer = gl.createBuffer()
     this.markerBuffer = gl.createBuffer()
+
+    const densityVertex = compileShader(
+      gl,
+      gl.VERTEX_SHADER,
+      DENSITY_VERTEX_SOURCE,
+    )
+    const densityFragment = compileShader(
+      gl,
+      gl.FRAGMENT_SHADER,
+      DENSITY_FRAGMENT_SOURCE,
+    )
+    if (densityVertex && densityFragment) {
+      const densityProgram = gl.createProgram()
+      if (densityProgram) {
+        gl.attachShader(densityProgram, densityVertex)
+        gl.attachShader(densityProgram, densityFragment)
+        gl.linkProgram(densityProgram)
+        if (gl.getProgramParameter(densityProgram, gl.LINK_STATUS)) {
+          this.densityProgram = densityProgram
+        }
+      }
+    }
+    this.densityBuffer = gl.createBuffer()
+    if (this.densityBuffer) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.densityBuffer)
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]),
+        gl.STATIC_DRAW,
+      )
+    }
+
     return Boolean(
       this.buffer &&
         this.colorBuffer &&
@@ -367,6 +471,11 @@ export class AtlasRenderer {
       return
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    this.drawDensity()
+
     gl.useProgram(this.program)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
     const location = gl.getAttribLocation(this.program, 'position')
@@ -397,6 +506,51 @@ export class AtlasRenderer {
     const pointSize = gl.getUniformLocation(this.program, 'pointSize')
     gl.uniform1f(pointSize, this.palette?.pointSize ?? 1)
     gl.drawArrays(gl.POINTS, 0, this.ids.length)
+
+    gl.disable(gl.BLEND)
+  }
+
+  private drawDensity(): void {
+    const gl = this.gl
+    if (
+      !gl ||
+      !this.densityVisible ||
+      !this.densityProgram ||
+      !this.densityBuffer ||
+      !this.densityTexture ||
+      !this.densityGridSize
+    )
+      return
+
+    gl.useProgram(this.densityProgram)
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.densityBuffer)
+    const positionLocation = gl.getAttribLocation(
+      this.densityProgram,
+      'position',
+    )
+    gl.enableVertexAttribArray(positionLocation)
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+
+    const densityTransform = gl.getUniformLocation(
+      this.densityProgram,
+      'transform',
+    )
+    gl.uniform3f(
+      densityTransform,
+      this.transform.scale,
+      this.transform.offsetX / this.canvas.clientWidth,
+      this.transform.offsetY / this.canvas.clientHeight,
+    )
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.densityTexture)
+    const densityMapLocation = gl.getUniformLocation(
+      this.densityProgram,
+      'densityMap',
+    )
+    gl.uniform1i(densityMapLocation, 0)
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 
   private pickNearest(x: number, y: number): string[] {
@@ -535,25 +689,52 @@ export const parseColor = (value: string): [number, number, number, number] => {
   }
 }
 
-const PLOT_INSET = 0.04
+const PLOT_INSET = 0.06
+
+const percentileBounds = (values: number[], lo: number, hi: number) => {
+  const sorted = Float64Array.from(values).sort()
+  const low = sorted[Math.floor(lo * (sorted.length - 1))]
+  const high = sorted[Math.ceil(hi * (sorted.length - 1))]
+  return { low, high }
+}
 
 export const normalizeCoordinates = (coordinates: Float32Array) => {
   if (!coordinates.length) return coordinates
-  let minX = coordinates[0]
-  let maxX = coordinates[0]
-  let minY = coordinates[1]
-  let maxY = coordinates[1]
-  for (let index = 2; index < coordinates.length; index += 2) {
-    minX = Math.min(minX, coordinates[index])
-    maxX = Math.max(maxX, coordinates[index])
-    minY = Math.min(minY, coordinates[index + 1])
-    maxY = Math.max(maxY, coordinates[index + 1])
+  const count = coordinates.length / 2
+  if (count < 4) {
+    let minX = coordinates[0]
+    let maxX = coordinates[0]
+    let minY = coordinates[1]
+    let maxY = coordinates[1]
+    for (let i = 2; i < coordinates.length; i += 2) {
+      minX = Math.min(minX, coordinates[i])
+      maxX = Math.max(maxX, coordinates[i])
+      minY = Math.min(minY, coordinates[i + 1])
+      maxY = Math.max(maxY, coordinates[i + 1])
+    }
+    const width = maxX - minX || 1
+    const height = maxY - minY || 1
+    return Float32Array.from(coordinates, (value, i) => {
+      const normalized =
+        i % 2 ? (value - minY) / height : (value - minX) / width
+      return PLOT_INSET + normalized * (1 - PLOT_INSET * 2)
+    })
   }
-  const width = maxX - minX || 1
-  const height = maxY - minY || 1
-  return Float32Array.from(coordinates, (value, index) => {
-    const normalized =
-      index % 2 ? (value - minY) / height : (value - minX) / width
+  const xs: number[] = []
+  const ys: number[] = []
+  for (let i = 0; i < coordinates.length; i += 2) {
+    xs.push(coordinates[i])
+    ys.push(coordinates[i + 1])
+  }
+  const xBounds = percentileBounds(xs, 0.02, 0.98)
+  const yBounds = percentileBounds(ys, 0.02, 0.98)
+  const width = xBounds.high - xBounds.low || 1
+  const height = yBounds.high - yBounds.low || 1
+  return Float32Array.from(coordinates, (value, i) => {
+    const { low, high } =
+      i % 2 ? { low: yBounds.low, high: yBounds.high } : xBounds
+    const clamped = Math.max(low, Math.min(high, value))
+    const normalized = (clamped - low) / (high - low || 1)
     return PLOT_INSET + normalized * (1 - PLOT_INSET * 2)
   })
 }

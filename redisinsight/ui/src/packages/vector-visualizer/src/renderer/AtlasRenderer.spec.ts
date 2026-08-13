@@ -16,6 +16,19 @@ const createGl = () =>
     COLOR_BUFFER_BIT: 8,
     FLOAT: 9,
     POINTS: 10,
+    TEXTURE_2D: 11,
+    TEXTURE0: 12,
+    TEXTURE_MIN_FILTER: 13,
+    TEXTURE_MAG_FILTER: 14,
+    TEXTURE_WRAP_S: 15,
+    TEXTURE_WRAP_T: 16,
+    LINEAR: 17,
+    CLAMP_TO_EDGE: 18,
+    LUMINANCE: 19,
+    UNSIGNED_BYTE: 20,
+    TRIANGLE_STRIP: 21,
+    SRC_ALPHA: 22,
+    ONE_MINUS_SRC_ALPHA: 23,
     createShader: jest.fn(() => ({})),
     shaderSource: jest.fn(),
     compileShader: jest.fn(),
@@ -36,10 +49,20 @@ const createGl = () =>
     getUniformLocation: jest.fn(() => ({})),
     uniform3f: jest.fn(),
     uniform1f: jest.fn(),
+    uniform1i: jest.fn(),
     drawArrays: jest.fn(),
     viewport: jest.fn(),
     deleteBuffer: jest.fn(),
     deleteProgram: jest.fn(),
+    deleteTexture: jest.fn(),
+    createTexture: jest.fn(() => ({})),
+    bindTexture: jest.fn(),
+    texParameteri: jest.fn(),
+    texImage2D: jest.fn(),
+    activeTexture: jest.fn(),
+    enable: jest.fn(),
+    disable: jest.fn(),
+    blendFunc: jest.fn(),
   }) as unknown as WebGL2RenderingContext
 
 describe('AtlasRenderer lifecycle', () => {
@@ -248,5 +271,67 @@ describe('AtlasRenderer lifecycle', () => {
       offsetX: 10,
       offsetY: -15,
     })
+  })
+
+  it('uploads a density texture and toggles its visibility', () => {
+    const canvas = document.createElement('canvas')
+    const gl = createGl()
+    const glMock = gl as unknown as {
+      createTexture: jest.Mock
+      texImage2D: jest.Mock
+      drawArrays: jest.Mock
+    }
+    jest.spyOn(canvas, 'getContext').mockReturnValue(gl)
+    Object.defineProperty(canvas, 'clientWidth', { value: 100 })
+    Object.defineProperty(canvas, 'clientHeight', { value: 100 })
+    const renderer = new AtlasRenderer(canvas, {
+      onSelect: jest.fn(),
+      onHover: jest.fn(),
+      onContextLost: jest.fn(),
+      onContextRestored: jest.fn(),
+      onUnsupported: jest.fn(),
+    })
+
+    const grid = new Float32Array([0, 0.5, 0.5, 1])
+    renderer.setDensityGrid(grid, 2)
+
+    expect(glMock.createTexture).toHaveBeenCalled()
+    expect(glMock.texImage2D).toHaveBeenCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      gl.LUMINANCE,
+      2,
+      2,
+      0,
+      gl.LUMINANCE,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 128, 128, 255]),
+    )
+
+    renderer.setDensityVisible(true)
+    renderer.setDensityVisible(false)
+    renderer.destroy()
+  })
+
+  it('cleans up density resources on destroy', () => {
+    const canvas = document.createElement('canvas')
+    const gl = createGl()
+    const glMock = gl as unknown as {
+      deleteTexture: jest.Mock
+      deleteBuffer: jest.Mock
+      deleteProgram: jest.Mock
+    }
+    jest.spyOn(canvas, 'getContext').mockReturnValue(gl)
+    const renderer = new AtlasRenderer(canvas, {
+      onSelect: jest.fn(),
+      onHover: jest.fn(),
+      onContextLost: jest.fn(),
+      onContextRestored: jest.fn(),
+      onUnsupported: jest.fn(),
+    })
+
+    renderer.destroy()
+    expect(glMock.deleteBuffer).toHaveBeenCalled()
+    expect(glMock.deleteProgram).toHaveBeenCalled()
   })
 })
