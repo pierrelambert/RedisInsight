@@ -3,7 +3,7 @@ import type { LayoutQuality } from '../worker/layout'
 export interface AtlasProvenance {
   sourceCount: number
   sampleCount: number
-  method: 'UMAP'
+  method: 'UMAP' | 'PCA' | string
   seed: number
   sourceFilter?: string
   freshness: 'fresh' | 'changed-while-sampled'

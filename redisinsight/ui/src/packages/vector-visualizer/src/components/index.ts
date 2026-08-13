@@ -1,5 +1,7 @@
 export { Advanced } from '../advanced/AdvancedView'
 export { Atlas } from '../atlas/Atlas'
+export { AtlasLegend } from '../atlas/AtlasLegend'
+export type { AtlasLegendEntry } from '../atlas/AtlasLegend'
 export { CompareTune } from '../compare/CompareTune'
 export { MetadataMatrix } from '../explore/MetadataMatrix'
 export {

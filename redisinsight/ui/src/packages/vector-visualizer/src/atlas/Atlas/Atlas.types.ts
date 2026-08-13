@@ -4,6 +4,7 @@ import type {
   AtlasPointColors,
   AtlasPointStates,
 } from '../../renderer/AtlasRenderer'
+import type { AtlasLegendEntry } from '../AtlasLegend'
 import type { AtlasProvenance } from '../provenance'
 
 export interface AtlasClusterLabel {
@@ -25,6 +26,12 @@ export interface AtlasProps {
   interactionMode?: 'pan' | 'region'
   showEvidenceDetails?: boolean
   selectedIds?: string[]
+  legendEntries?: AtlasLegendEntry[]
+  onLegendEntryClick?: (label: string) => void
+  showMapLabels?: boolean
+  showDensity?: boolean
+  densityGrid?: Float32Array | null
+  densityGridSize?: number
   onSelectionChange(ids: string[]): void
   renderAccessibleSelection?(
     ids: string[],

@@ -11,6 +11,7 @@ import {
   type AtlasRendererPalette,
 } from '../../renderer/AtlasRenderer'
 import type { AtlasTransform } from '../../renderer/interaction'
+import { AtlasLegend } from '../AtlasLegend'
 import { atlasProvenanceRows } from '../provenance'
 import * as S from './Atlas.styles'
 import type { AtlasProps } from './Atlas.types'
@@ -27,6 +28,12 @@ export const Atlas = ({
   interactionMode = 'pan',
   showEvidenceDetails = true,
   selectedIds: controlledSelectedIds,
+  legendEntries,
+  onLegendEntryClick,
+  showMapLabels = false,
+  showDensity = false,
+  densityGrid,
+  densityGridSize,
   onSelectionChange,
   renderAccessibleSelection,
 }: AtlasProps) => {
@@ -107,6 +114,16 @@ export const Atlas = ({
     )
   }, [coordinates, palette, pointColors, pointStates, sampleIds, selectedIds])
 
+  useEffect(() => {
+    if (densityGrid && densityGridSize) {
+      renderer.current?.setDensityGrid(densityGrid, densityGridSize)
+    }
+  }, [densityGrid, densityGridSize])
+
+  useEffect(() => {
+    renderer.current?.setDensityVisible(showDensity)
+  }, [showDensity])
+
   return (
     <S.Shell>
       <S.Header>
@@ -119,53 +136,62 @@ export const Atlas = ({
             : `2D UMAP projection · ${sampleIds.length} response-backed sampled records`}
         </Text>
       </S.Header>
-      <S.CanvasFrame>
-        <S.AtlasCanvas
-          aria-label={
-            interactionMode === 'region'
-              ? 'Selection plot; drag to select a region; use the linked selection table for keyboard navigation'
-              : 'Atlas plot; use the linked selection table for keyboard navigation'
-          }
-          data-colored-point-count={Object.keys(pointColors).length}
-          data-point-count={sampleIds.length}
-          data-point-palette={JSON.stringify(palette)}
-          data-selection-mode={interactionMode}
-          ref={canvas}
-          tabIndex={0}
-        />
-        <S.HorizontalAxis aria-hidden="true">
-          UMAP 1 · derived coordinate
-        </S.HorizontalAxis>
-        <S.VerticalAxis aria-hidden="true">
-          UMAP 2 · derived coordinate
-        </S.VerticalAxis>
-        {clusterLabels.map((clusterLabel) => (
-          <S.ClusterLabel
-            $offsetX={transform.offsetX}
-            $offsetY={transform.offsetY}
-            $scale={transform.scale}
-            $x={clusterLabel.x}
-            $y={clusterLabel.y}
-            aria-label={`${clusterLabel.label} cluster label`}
-            data-cluster-count={clusterLabel.count}
-            key={clusterLabel.id}
-            title={`${clusterLabel.label}: ${clusterLabel.count.toLocaleString()} sampled records`}
-          >
-            {clusterLabel.label}
-          </S.ClusterLabel>
-        ))}
-        {selectionBox && (
-          <S.SelectionOverlay
-            $height={selectionBox.height}
-            $width={selectionBox.width}
-            $x={selectionBox.x}
-            $y={selectionBox.y}
-            aria-label="Selected region bounds"
-            data-selected-count={selectedIds.length}
-            role="img"
+      <S.CanvasRow>
+        <S.CanvasFrame>
+          <S.AtlasCanvas
+            aria-label={
+              interactionMode === 'region'
+                ? 'Selection plot; drag to select a region; use the linked selection table for keyboard navigation'
+                : 'Atlas plot; use the linked selection table for keyboard navigation'
+            }
+            data-colored-point-count={Object.keys(pointColors).length}
+            data-point-count={sampleIds.length}
+            data-point-palette={JSON.stringify(palette)}
+            data-selection-mode={interactionMode}
+            ref={canvas}
+            tabIndex={0}
+          />
+          <S.HorizontalAxis aria-hidden="true">
+            UMAP 1 · derived coordinate
+          </S.HorizontalAxis>
+          <S.VerticalAxis aria-hidden="true">
+            UMAP 2 · derived coordinate
+          </S.VerticalAxis>
+          {showMapLabels &&
+            clusterLabels.map((clusterLabel) => (
+              <S.ClusterLabel
+                $offsetX={transform.offsetX}
+                $offsetY={transform.offsetY}
+                $scale={transform.scale}
+                $x={clusterLabel.x}
+                $y={clusterLabel.y}
+                aria-label={`${clusterLabel.label} cluster label`}
+                data-cluster-count={clusterLabel.count}
+                key={clusterLabel.id}
+                title={`${clusterLabel.label}: ${clusterLabel.count.toLocaleString()} sampled records`}
+              >
+                {clusterLabel.label}
+              </S.ClusterLabel>
+            ))}
+          {selectionBox && (
+            <S.SelectionOverlay
+              $height={selectionBox.height}
+              $width={selectionBox.width}
+              $x={selectionBox.x}
+              $y={selectionBox.y}
+              aria-label="Selected region bounds"
+              data-selected-count={selectedIds.length}
+              role="img"
+            />
+          )}
+        </S.CanvasFrame>
+        {legendEntries && legendEntries.length > 0 && (
+          <AtlasLegend
+            entries={legendEntries}
+            onEntryClick={onLegendEntryClick}
           />
         )}
-      </S.CanvasFrame>
+      </S.CanvasRow>
       {rendererState === 'lost' && (
         <Text color="danger" role="status">
           The WebGL2 context was lost. Waiting to restore the Atlas.

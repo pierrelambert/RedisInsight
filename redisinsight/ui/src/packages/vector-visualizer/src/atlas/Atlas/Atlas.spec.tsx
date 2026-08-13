@@ -22,6 +22,8 @@ interface RendererCallbacks {
 
 let mockCallbacks: RendererCallbacks | undefined
 const mockDestroy = jest.fn()
+const mockSetDensityGrid = jest.fn()
+const mockSetDensityVisible = jest.fn()
 
 jest.mock('../../renderer/AtlasRenderer', () => ({
   AtlasRenderer: jest
@@ -29,7 +31,13 @@ jest.mock('../../renderer/AtlasRenderer', () => ({
     .mockImplementation(
       (_canvas: HTMLCanvasElement, options: RendererCallbacks) => {
         mockCallbacks = options
-        return { setPoints: jest.fn(), resize: jest.fn(), destroy: mockDestroy }
+        return {
+          setPoints: jest.fn(),
+          resize: jest.fn(),
+          destroy: mockDestroy,
+          setDensityGrid: mockSetDensityGrid,
+          setDensityVisible: mockSetDensityVisible,
+        }
       },
     ),
 }))
@@ -63,6 +71,8 @@ describe('Atlas', () => {
   beforeEach(() => {
     mockCallbacks = undefined
     mockDestroy.mockClear()
+    mockSetDensityGrid.mockClear()
+    mockSetDensityVisible.mockClear()
     global.ResizeObserver = class {
       observe(): void {}
 
@@ -121,6 +131,8 @@ describe('Atlas', () => {
       setPoints,
       resize: jest.fn(),
       destroy: mockDestroy,
+      setDensityGrid: mockSetDensityGrid,
+      setDensityVisible: mockSetDensityVisible,
     }))
     renderComponent({ selectedIds: ['b'] })
     expect(setPoints.mock.calls.at(-1)?.[3]).toMatchObject({ b: ['selected'] })
@@ -133,6 +145,8 @@ describe('Atlas', () => {
       setPoints,
       resize: jest.fn(),
       destroy: mockDestroy,
+      setDensityGrid: mockSetDensityGrid,
+      setDensityVisible: mockSetDensityVisible,
     }))
     renderComponent({ selectedIds: ['b'], pointColors: { b: '#aabbcc' } })
     expect(setPoints.mock.calls.at(-1)?.[3]).toMatchObject({ b: ['selected'] })
@@ -167,5 +181,60 @@ describe('Atlas', () => {
       inlineSize: '40%',
       blockSize: '50%',
     })
+  })
+
+  it('renders the legend panel when legendEntries are provided', () => {
+    renderComponent({
+      legendEntries: [
+        { label: 'Cluster 0', color: '#ff0000', count: 10 },
+        { label: 'Cluster 1', color: '#00ff00', count: 5 },
+      ],
+    })
+
+    expect(screen.getByTestId('atlas-legend')).toBeInTheDocument()
+    expect(screen.getByLabelText('Cluster 0 (10)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Cluster 1 (5)')).toBeInTheDocument()
+  })
+
+  it('does not render the legend panel when legendEntries is empty', () => {
+    renderComponent({ legendEntries: [] })
+
+    expect(screen.queryByTestId('atlas-legend')).not.toBeInTheDocument()
+  })
+
+  it('hides cluster labels when showMapLabels is false', () => {
+    renderComponent({
+      clusterLabels: [
+        { id: 'c1', label: 'Group A', x: 0.5, y: 0.5, count: 10 },
+      ],
+      showMapLabels: false,
+    })
+
+    expect(
+      screen.queryByLabelText('Group A cluster label'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows cluster labels when showMapLabels is true', () => {
+    renderComponent({
+      clusterLabels: [
+        { id: 'c1', label: 'Group A', x: 0.5, y: 0.5, count: 10 },
+      ],
+      showMapLabels: true,
+    })
+
+    expect(screen.getByLabelText('Group A cluster label')).toBeInTheDocument()
+  })
+
+  it('passes density grid data to the renderer', () => {
+    const grid = new Float32Array(16)
+    renderComponent({
+      showDensity: true,
+      densityGrid: grid,
+      densityGridSize: 4,
+    })
+
+    expect(mockSetDensityGrid).toHaveBeenCalledWith(grid, 4)
+    expect(mockSetDensityVisible).toHaveBeenCalledWith(true)
   })
 })

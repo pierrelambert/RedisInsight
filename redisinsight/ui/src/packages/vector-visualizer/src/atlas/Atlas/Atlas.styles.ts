@@ -21,6 +21,14 @@ export const Footer = styled(Text)`
   padding-block-start: ${({ theme }) => theme.core.space.space050};
 `
 
+export const CanvasRow = styled.div`
+  display: flex;
+  flex: 1 1 auto;
+  gap: ${({ theme }) => theme.core.space.space100};
+  min-block-size: 0;
+  min-inline-size: 0;
+`
+
 export const CanvasFrame = styled.div`
   position: relative;
   display: flex;
