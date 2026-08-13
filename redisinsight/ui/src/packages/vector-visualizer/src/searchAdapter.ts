@@ -106,6 +106,43 @@ export const planSearchNeighbors = ({
 export const planSearchProfile = (index: string, query: string) =>
   plan('FT.PROFILE', [index, 'SEARCH', 'QUERY', query, 'LIMITED'])
 
+export const planProfileSearchNeighbors = ({
+  index,
+  vectorField,
+  filter,
+  queryParameter,
+  vector,
+  limit,
+}: {
+  index: string
+  vectorField: string
+  filter?: string
+  queryParameter: string
+  vector: Uint8Array
+  limit: number
+}): CommandPlan => {
+  const query = `${filter ? `(${filter})` : '*'}=>[KNN ${limit} @${vectorField} $${queryParameter} AS __vv_metric]`
+  return plan('FT.PROFILE', [
+    index,
+    'SEARCH',
+    'LIMITED',
+    'QUERY',
+    query,
+    'PARAMS',
+    '2',
+    queryParameter,
+    vector,
+    'SORTBY',
+    '__vv_metric',
+    'ASC',
+    'RETURN',
+    '1',
+    '__vv_metric',
+    'DIALECT',
+    '2',
+  ])
+}
+
 export interface SearchVectorField {
   name: string
   dimensions?: number

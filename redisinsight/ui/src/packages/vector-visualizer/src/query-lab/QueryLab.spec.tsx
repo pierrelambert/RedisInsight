@@ -58,7 +58,7 @@ describe('QueryLab', () => {
       `Selected ${neighbor.id}`,
     )
     expect(
-      screen.getByRole('heading', { name: 'Selection' }),
+      screen.getByRole('heading', { name: 'Returned results' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('row', { name: new RegExp(neighbor.id) }),
@@ -67,7 +67,7 @@ describe('QueryLab', () => {
       screen.getByRole('heading', { name: 'Inspector' }),
     ).toHaveTextContent('Inspector')
     expect(screen.getByText('Not plotted')).toBeInTheDocument()
-    expect(screen.getByText('0.53')).toBeInTheDocument()
+    expect(screen.getByText(/Similarity: 0\.5300/)).toBeInTheDocument()
   })
 
   it('prioritizes response-backed evidence beside a persistent result inspector', () => {

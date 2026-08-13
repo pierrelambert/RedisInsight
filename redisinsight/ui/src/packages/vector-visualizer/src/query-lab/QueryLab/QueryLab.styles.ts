@@ -77,13 +77,6 @@ export const InspectorPanel = styled(Col).attrs({ gap: 'm' })`
     theme.semantic.color.background.neutral200};
 `
 
-export const EvidenceDetails = styled(Col).attrs({ gap: 'm' })`
-  min-inline-size: 0;
-  padding-block-start: ${({ theme }) => theme.core.space.space100};
-  border-block-start: ${({ theme }) => theme.core.space.space010} solid
-    ${({ theme }) => theme.semantic.color.border.neutral500};
-`
-
 export const EvidenceScrollport = styled.div`
   flex: 1 1 0;
   min-block-size: 0;

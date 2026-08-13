@@ -295,154 +295,156 @@ export const QueryLab = ({
                   )}
                 </Col>
               </S.Section>
-              <S.EvidenceDetails>
-                <S.Section as="section" aria-labelledby="distribution-heading">
-                  <Title component="h3" id="distribution-heading" size="XS">
-                    Result / source sample distribution
-                  </Title>
-                  <Text color="subdued" size="XS">
-                    Score/distance axis · bounded query result sample ·
-                    Freshness: {freshness}
-                  </Text>
-                  <Text>{metricLabel}</Text>
-                  <Text>
-                    {threshold
-                      ? `${threshold.label}: ${thresholdOperator(threshold.operator)} ${threshold.value.toFixed(2)}`
-                      : 'Threshold: Unavailable'}
-                  </Text>
-                  <Col gap="xs">
-                    <Text color="subdued" size="XS">
-                      {sourceSample
-                        ? `${sourceSample.completeness === 'partial' ? 'Partial bounded' : 'Bounded'} source sample: ${sourceSample.values.filter(Number.isFinite).length} values · ${sourceSample.provenance}`
-                        : 'Unavailable: bounded source-sample distribution facts were not returned.'}
-                    </Text>
-                    {distributionBins.map((bin) => (
-                      <S.WaterfallRow
-                        aria-label={`Distribution bin ${bin.index + 1}, ${bin.start.toFixed(2)} to ${bin.end.toFixed(2)}, result count ${bin.resultIds.length}, ${sourceSample ? `${sourceSample.completeness} source count ${bin.sourceCount ?? 0}` : 'source count unavailable'}`}
-                        aria-pressed={bin.resultIds.some((id) =>
-                          selectedIds.includes(id),
-                        )}
-                        disabled={!bin.resultIds.length}
-                        key={`${bin.start}-${bin.end}`}
-                        type="button"
-                        $selected={bin.resultIds.some((id) =>
-                          selectedIds.includes(id),
-                        )}
-                        onClick={() => selectMany(bin.resultIds)}
-                      >
-                        {bin.start.toFixed(2)}–{bin.end.toFixed(2)} · results{' '}
-                        {bin.resultIds.length} · source{' '}
-                        {bin.sourceCount ?? 'Unavailable'}
-                      </S.WaterfallRow>
-                    ))}
-                  </Col>
-                  <Title component="h3" size="XS">
-                    Ordered adjacent rank gaps
-                  </Title>
-                  {largestGap ? (
-                    <Text size="XS">
-                      Largest observed adjacent gap: {largestGap.gap.toFixed(2)}{' '}
-                      after rank {largestGap.afterRank} (descriptive only)
-                    </Text>
-                  ) : (
-                    <Text color="subdued" size="XS">
-                      Unavailable: at least two finite returned values are
-                      required.
-                    </Text>
-                  )}
-                  <Col gap="xs">
-                    {rankGaps.map((gap) => (
-                      <S.WaterfallRow
-                        aria-label={`Select ${gap.afterId} from rank gaps`}
-                        aria-pressed={selectedIds.includes(gap.afterId)}
-                        key={`${gap.afterId}-${gap.beforeId}`}
-                        type="button"
-                        $selected={selectedIds.includes(gap.afterId)}
-                        onClick={() =>
-                          selectMany([gap.afterId, gap.beforeId], gap.afterId)
-                        }
-                        onKeyDown={(event) =>
-                          selectFromKeyboard(
-                            event,
-                            [gap.afterId, gap.beforeId],
-                            gap.afterId,
-                          )
-                        }
-                      >
-                        Rank {gap.afterRank} → {gap.beforeRank} ·{' '}
-                        {gap.value.toFixed(2)} → {gap.nextValue.toFixed(2)} ·
-                        gap {gap.gap.toFixed(2)}
-                      </S.WaterfallRow>
-                    ))}
-                  </Col>
-                </S.Section>
-              </S.EvidenceDetails>
             </S.EvidenceScrollport>
           </S.EvidencePanel>
           <S.InspectorPanel
             as="aside"
-            aria-labelledby="returned-results-heading"
+            aria-labelledby="distribution-heading"
           >
-            <Title component="h3" id="returned-results-heading" size="S">
-              Returned results
-            </Title>
-            <Text color="subdued" size="XS">
-              {responseProvenance
-                ? `Response-backed ${responseProvenance} results`
-                : 'Response-backed command results'}
-            </Text>
-            <S.Section as="section" aria-labelledby="selection-heading">
-              <Title component="h4" id="selection-heading" size="XS">
-                Selection
-              </Title>
-              <SelectionTable
-                focusedId={focusedId}
-                rows={selectionRows}
-                variant="compact"
-                onFocus={select}
+            <S.EvidenceScrollport
+              aria-label="Distribution and results scrollable content"
+              data-testid="query-lab-inspector-scrollport"
+              tabIndex={0}
+            >
+              <S.Section as="section" aria-labelledby="distribution-heading">
+                <Title component="h3" id="distribution-heading" size="XS">
+                  Result / source sample distribution
+                </Title>
+                <Text color="subdued" size="XS">
+                  Score/distance axis · bounded query result sample ·
+                  Freshness: {freshness}
+                </Text>
+                <Text>{metricLabel}</Text>
+                <Text>
+                  {threshold
+                    ? `${threshold.label}: ${thresholdOperator(threshold.operator)} ${threshold.value.toFixed(2)}`
+                    : 'Threshold: Unavailable'}
+                </Text>
+                <Col gap="xs">
+                  <Text color="subdued" size="XS">
+                    {sourceSample
+                      ? `${sourceSample.completeness === 'partial' ? 'Partial bounded' : 'Bounded'} source sample: ${sourceSample.values.filter(Number.isFinite).length} values · ${sourceSample.provenance}`
+                      : 'Unavailable: bounded source-sample distribution facts were not returned.'}
+                  </Text>
+                  {distributionBins.map((bin) => (
+                    <S.WaterfallRow
+                      aria-label={`Distribution bin ${bin.index + 1}, ${bin.start.toFixed(2)} to ${bin.end.toFixed(2)}, result count ${bin.resultIds.length}, ${sourceSample ? `${sourceSample.completeness} source count ${bin.sourceCount ?? 0}` : 'source count unavailable'}`}
+                      aria-pressed={bin.resultIds.some((id) =>
+                        selectedIds.includes(id),
+                      )}
+                      disabled={!bin.resultIds.length}
+                      key={`${bin.start}-${bin.end}`}
+                      type="button"
+                      $selected={bin.resultIds.some((id) =>
+                        selectedIds.includes(id),
+                      )}
+                      onClick={() => selectMany(bin.resultIds)}
+                    >
+                      {bin.start.toFixed(2)}–{bin.end.toFixed(2)} · results{' '}
+                      {bin.resultIds.length} · source{' '}
+                      {bin.sourceCount ?? 'Unavailable'}
+                    </S.WaterfallRow>
+                  ))}
+                </Col>
+                <Title component="h3" size="XS">
+                  Ordered adjacent rank gaps
+                </Title>
+                {largestGap ? (
+                  <Text size="XS">
+                    Largest observed adjacent gap: {largestGap.gap.toFixed(2)}{' '}
+                    after rank {largestGap.afterRank} (descriptive only)
+                  </Text>
+                ) : (
+                  <Text color="subdued" size="XS">
+                    Unavailable: at least two finite returned values are
+                    required.
+                  </Text>
+                )}
+                <Col gap="xs">
+                  {rankGaps.map((gap) => (
+                    <S.WaterfallRow
+                      aria-label={`Select ${gap.afterId} from rank gaps`}
+                      aria-pressed={selectedIds.includes(gap.afterId)}
+                      key={`${gap.afterId}-${gap.beforeId}`}
+                      type="button"
+                      $selected={selectedIds.includes(gap.afterId)}
+                      onClick={() =>
+                        selectMany([gap.afterId, gap.beforeId], gap.afterId)
+                      }
+                      onKeyDown={(event) =>
+                        selectFromKeyboard(
+                          event,
+                          [gap.afterId, gap.beforeId],
+                          gap.afterId,
+                        )
+                      }
+                    >
+                      Rank {gap.afterRank} → {gap.beforeRank} ·{' '}
+                      {gap.value.toFixed(2)} → {gap.nextValue.toFixed(2)} ·
+                      gap {gap.gap.toFixed(2)}
+                    </S.WaterfallRow>
+                  ))}
+                </Col>
+              </S.Section>
+              <S.Section as="section" aria-labelledby="selection-heading">
+                <Title component="h4" id="selection-heading" size="XS">
+                  Returned results
+                </Title>
+                <Text color="subdued" size="XS">
+                  {responseProvenance
+                    ? `Response-backed ${responseProvenance} results`
+                    : 'Response-backed command results'}
+                </Text>
+                <SelectionTable
+                  focusedId={focusedId}
+                  rows={selectionRows}
+                  variant="compact"
+                  onFocus={select}
+                />
+              </S.Section>
+              <SelectionInspector
+                exactness={exactness}
+                provenance={
+                  focusedRow?.id
+                    ? neighbors.find(({ id }) => id === focusedRow.id)
+                        ?.provenance
+                    : undefined
+                }
+                row={focusedRow}
               />
-            </S.Section>
-            <SelectionInspector
-              exactness={exactness}
-              provenance={
-                focusedRow?.id
-                  ? neighbors.find(({ id }) => id === focusedRow.id)?.provenance
-                  : undefined
-              }
-              row={focusedRow}
-            />
-            <S.Section as="section" aria-labelledby="profile-heading">
-              <Title component="h4" id="profile-heading" size="XS">
-                {profileTitle(profile)}
-              </Title>
-              {profile.kind === 'reduced' && (
-                <Text color="subdued" size="S">
-                  VSIM inputs and results only
-                </Text>
-              )}
-              {profile.kind === 'full' && (
-                <Text color="subdued" size="S">
-                  {profile.stages?.length
-                    ? 'Returned iterator stages'
-                    : 'Iterator stages unavailable'}
-                </Text>
-              )}
-              {Object.entries(profile.facts).map(([name, value]) => (
-                <Row gap="s" justify="between" key={name}>
-                  <Text size="S">{name}</Text>
-                  <Text size="S">{value ?? 'Unavailable'}</Text>
-                </Row>
-              ))}
-              {profile.stages?.map((stage) => (
-                <Text
-                  key={`${stage.name}-${stage.count ?? ''}-${stage.mode ?? ''}`}
-                  size="S"
-                >
-                  {stage.name} · count: {stage.count ?? 'Unavailable'} · mode:{' '}
-                  {stage.mode ?? 'Unavailable'}
-                </Text>
-              ))}
-            </S.Section>
+              <S.Section as="section" aria-labelledby="profile-heading">
+                <Title component="h4" id="profile-heading" size="XS">
+                  {profileTitle(profile)}
+                </Title>
+                {profile.kind === 'reduced' && (
+                  <Text color="subdued" size="S">
+                    VSIM inputs and results only
+                  </Text>
+                )}
+                {profile.kind === 'full' && (
+                  <Text color="subdued" size="S">
+                    {profile.stages?.length
+                      ? 'Returned iterator stages'
+                      : 'Iterator stages unavailable'}
+                  </Text>
+                )}
+                {Object.entries(profile.facts).map(([name, value]) => (
+                  <Row gap="s" justify="between" key={name}>
+                    <Text size="S">{name}</Text>
+                    <Text size="S">{value ?? 'Unavailable'}</Text>
+                  </Row>
+                ))}
+                {profile.stages?.map((stage) => (
+                  <Text
+                    key={`${stage.name}-${stage.count ?? ''}-${stage.mode ?? ''}`}
+                    size="S"
+                  >
+                    {stage.name} · count: {stage.count ?? 'Unavailable'} · mode:{' '}
+                    {stage.mode ?? 'Unavailable'}
+                  </Text>
+                ))}
+              </S.Section>
+            </S.EvidenceScrollport>
           </S.InspectorPanel>
         </S.Workspace>
       ) : (
