@@ -85,6 +85,69 @@ export interface TopologyResult {
   provenance: EvidenceProvenance
 }
 
+export interface AggregateReduceOp {
+  function: string
+  field?: string
+  args?: string[]
+  alias: string
+}
+
+export interface AggregateQueryInput {
+  index: string
+  baseQuery: string
+  queryParameter: string
+  vector: Uint8Array
+  loadFields?: string[]
+  groupByFields: string[]
+  reduceOps: AggregateReduceOp[]
+  sortBy?: { field: string; order: 'ASC' | 'DESC' }
+  limit?: number
+}
+
+export interface AggregateResultGroup {
+  [field: string]: string | number
+}
+
+export interface AggregateResult {
+  groups: AggregateResultGroup[]
+  totalGroups: number
+}
+
+export interface HybridQueryInput {
+  index: string
+  textQuery: string
+  vectorField: string
+  queryParameter: string
+  vector: Uint8Array
+  vsimMode: 'knn' | 'range'
+  limit: number
+  fusionMethod: 'rrf' | 'linear'
+  rrfConstant?: number
+  rrfWindow?: number
+  linearAlpha?: number
+  linearBeta?: number
+  radius?: number
+  epsilon?: number
+  efRuntime?: number
+  searchWindowSize?: number
+  shardKRatio?: number
+  filter?: string
+  loadFields?: string[]
+}
+
+export interface HybridScoreDocument {
+  id: string
+  textScore: number
+  vectorScore: number
+  hybridScore: number
+  fields?: Record<string, string>
+}
+
+export interface HybridQueryResult {
+  documents: HybridScoreDocument[]
+  totalResults: number
+}
+
 export interface VectorSourceAdapter {
   readonly source: VectorDataSourceRef
   readonly capabilities: VectorSourceCapabilities
