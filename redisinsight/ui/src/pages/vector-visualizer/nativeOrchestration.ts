@@ -10,6 +10,8 @@ import {
 } from 'uiSrc/packages/vector-visualizer/src/contracts'
 import {
   parseSearchNeighbors,
+  parseSearchProfile,
+  planProfileSearchNeighbors,
   parseSearchInfo,
   parseAllowListedSearchMetadata,
   planSearchNeighbors,
@@ -504,7 +506,13 @@ export type NativeQueryResult =
         plotted: boolean
         provenance: 'FT.SEARCH' | 'VSIM'
       }>
-      profile: { kind: 'none'; facts: Record<string, never> }
+      profile:
+        | { kind: 'none'; facts: Record<string, never> }
+        | {
+            kind: 'full'
+            facts: Record<string, string | undefined>
+            stages?: Array<{ name: string; count?: string; mode?: string }>
+          }
     }
   | { kind: 'cancelled' | 'stale' | 'unsupported' }
 
@@ -530,6 +538,37 @@ const queryAccepted = (input: NativeQueryInput) => {
     throw new Stale()
 }
 
+const normalizeProfile = (
+  raw: ReturnType<typeof parseSearchProfile>,
+): Extract<NativeQueryResult, { kind: 'ready' }>['profile'] => {
+  const facts: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(raw.facts)) {
+    facts[key] =
+      typeof value === 'string'
+        ? value
+        : value === undefined
+          ? undefined
+          : String(value)
+  }
+  const stages = raw.stages
+    .map((stage) => {
+      const name =
+        asText(stage.Type) ?? asText(stage.Name) ?? asText(stage.Iterator)
+      if (!name) return undefined
+      const count = stage.Counter ?? stage.Count ?? stage['Number of reading operations']
+      return {
+        name,
+        count: count !== undefined ? String(count) : undefined,
+        mode: asText(stage.Mode) ?? undefined,
+      }
+    })
+    .filter(
+      (s): s is { name: string; count?: string; mode?: string } =>
+        s !== undefined,
+    )
+  return { kind: 'full', facts, stages }
+}
+
 const asQueryResult = (
   neighbors: Array<{
     id: string
@@ -539,6 +578,7 @@ const asQueryResult = (
   }>,
   sampleIds: string[],
   exactness: 'exact' | 'approximate' | 'unknown',
+  profile?: Extract<NativeQueryResult, { kind: 'ready' }>['profile'],
 ): Extract<NativeQueryResult, { kind: 'ready' }> => ({
   kind: 'ready',
   exactness,
@@ -547,7 +587,7 @@ const asQueryResult = (
     rank: index + 1,
     plotted: sampleIds.includes(neighbor.id),
   })),
-  profile: { kind: 'none', facts: {} },
+  profile: profile ?? { kind: 'none', facts: {} },
 })
 
 /**
@@ -568,25 +608,37 @@ export const orchestrateNativeQuery = async (
     queryAccepted(input)
     if (input.source.kind === 'search-index') {
       if (input.metric === 'unknown') return { kind: 'unsupported' }
+      const vectorBytes = new Uint8Array(
+        input.anchorVector.buffer,
+        input.anchorVector.byteOffset,
+        input.anchorVector.byteLength,
+      )
       const reply = await input.execute(
-        planSearchNeighbors({
+        planProfileSearchNeighbors({
           index: input.source.index,
           vectorField: input.source.vectorField,
           queryParameter: 'vv_anchor',
-          vector: new Uint8Array(
-            input.anchorVector.buffer,
-            input.anchorVector.byteOffset,
-            input.anchorVector.byteLength,
-          ),
+          vector: vectorBytes,
           limit: input.limit,
         }),
         input.signal,
       )
       queryAccepted(input)
-      const parsed = parseSearchNeighbors(reply, {
+      const profileReply = Array.isArray(reply) ? reply : [reply]
+      const searchResults = profileReply[0]
+      const parsed = parseSearchNeighbors(searchResults, {
         metric: input.metric,
         algorithm: input.algorithm,
       })
+      let profile: Extract<NativeQueryResult, { kind: 'ready' }>['profile'] = {
+        kind: 'none',
+        facts: {},
+      }
+      try {
+        profile = normalizeProfile(parseSearchProfile(profileReply))
+      } catch {
+        // profile parsing is best-effort
+      }
       return asQueryResult(
         parsed.map((neighbor) => ({
           id: neighbor.id,
@@ -602,6 +654,7 @@ export const orchestrateNativeQuery = async (
           : parsed.some((neighbor) => neighbor.provenance.exactness === 'exact')
             ? 'exact'
             : 'unknown',
+        profile,
       )
     }
 

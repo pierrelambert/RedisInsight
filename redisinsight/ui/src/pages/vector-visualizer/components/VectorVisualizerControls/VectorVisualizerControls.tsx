@@ -81,6 +81,8 @@ const ControlsBody = ({
   clusterLabels,
   clusterLabelLimit,
   outliers,
+  densityHeatmap,
+  mapLabels,
   summary,
   loading,
 }: VectorVisualizerControlsProps) => {
@@ -263,7 +265,7 @@ const ControlsBody = ({
         </FormField>
       </Col>
 
-      {(clusterLabels || clusterLabelLimit || outliers) && (
+      {(clusterLabels || clusterLabelLimit || outliers || densityHeatmap || mapLabels) && (
         <Col gap="m">
           {clusterLabels && (
             <VisibilityControl
@@ -289,6 +291,18 @@ const ControlsBody = ({
           )}
           {outliers && (
             <VisibilityControl control={outliers} label="Show outliers" />
+          )}
+          {densityHeatmap && (
+            <VisibilityControl
+              control={densityHeatmap}
+              label="Show density heatmap"
+            />
+          )}
+          {mapLabels && (
+            <VisibilityControl
+              control={mapLabels}
+              label="Show cluster labels on map"
+            />
           )}
         </Col>
       )}

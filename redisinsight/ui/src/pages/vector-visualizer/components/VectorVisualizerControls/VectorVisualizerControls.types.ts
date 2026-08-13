@@ -82,6 +82,8 @@ export type VectorVisualizerControlsProps = {
   clusterLabels?: VectorVisualizerVisibilityControl
   clusterLabelLimit?: VectorVisualizerClusterLabelLimitControl
   outliers?: VectorVisualizerVisibilityControl
+  densityHeatmap?: VectorVisualizerVisibilityControl
+  mapLabels?: VectorVisualizerVisibilityControl
   summary?: VectorVisualizerControlsSummary
   loading?: boolean
 }

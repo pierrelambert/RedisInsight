@@ -18,12 +18,24 @@ import { parseVlinksTopology } from 'uiSrc/packages/vector-visualizer/src/advanc
 import {
   Advanced,
   Atlas,
+  AtlasLegend,
   CompareTune,
   DuplicateExplorer,
   OutlierExplorer,
   QueryLab,
   XRay,
 } from 'uiSrc/packages/vector-visualizer/src/components'
+import type { AtlasLegendEntry } from 'uiSrc/packages/vector-visualizer/src/components'
+import {
+  computeDensityGrid,
+  recommendGridSize,
+} from 'uiSrc/packages/vector-visualizer/src/renderer/density'
+import {
+  autoEpsilon,
+  clusterCentroids,
+  computeDBSCAN,
+  type DBSCANResult,
+} from 'uiSrc/packages/vector-visualizer/src/health/clustering'
 import {
   createLocalManifestStorage,
   toLocalManifest,
@@ -79,6 +91,10 @@ import { VectorVisualizerControls } from './components/VectorVisualizerControls'
 import { VectorVisualizerNeighbors } from './components/VectorVisualizerNeighbors'
 import { VectorVisualizerResults } from './components/VectorVisualizerResults'
 import { VectorVisualizerWorkspace } from './components/VectorVisualizerWorkspace'
+
+const DBSCAN_COLOR_BY_VALUE = '__dbscan_clusters__'
+const DBSCAN_MIN_POINTS = 5
+const DBSCAN_K = 5
 
 const DEFAULT_SAMPLE_BUDGET = 2_000
 const MIN_SAMPLE_BUDGET = 500
@@ -352,16 +368,28 @@ const Explore = ({
   selectedIds,
   onSelectedIdsChange,
   metadataField,
+  colorByValue: colorBySelection,
   showClusterLabels,
   clusterLabelLimit,
+  showDensity: densityVisible,
+  densityGrid: densityGridData,
+  densityGridSize: densitySize,
+  dbscanResult: dbscan,
+  showMapLabels: mapLabelsVisible,
   mode = 'atlas',
 }: {
   sample?: NativePageSample
   selectedIds: string[]
   onSelectedIdsChange(ids: string[]): void
   metadataField: string
+  colorByValue: string
   showClusterLabels: boolean
   clusterLabelLimit: ClusterLabelLimit
+  showDensity: boolean
+  densityGrid: Float32Array | null
+  densityGridSize: number
+  dbscanResult: DBSCANResult | null
+  showMapLabels: boolean
   mode?: 'atlas' | 'selection'
 }) => {
   const { t } = useTranslation()
@@ -380,6 +408,9 @@ const Explore = ({
     theme.semantic.color.text.discovery400,
     theme.semantic.color.text.primary400,
   ]
+
+  const isDbscanColorBy = colorBySelection === DBSCAN_COLOR_BY_VALUE
+
   const metadataValues = [
     ...new Set(
       result.records.flatMap(({ metadata }) => {
@@ -388,62 +419,203 @@ const Explore = ({
       }),
     ),
   ].sort()
-  const colorByValue = new Map(
+  const metadataColorMap = new Map(
     metadataValues.map((value, index) => [
       value,
       metadataPalette[index % metadataPalette.length],
     ]),
   )
-  const pointColors = Object.fromEntries(
-    result.records.flatMap(({ id, metadata }) => {
-      const value = metadata?.[metadataField]
-      const color =
-        value === undefined ? undefined : colorByValue.get(String(value))
-      return color ? [[id, color]] : []
-    }),
-  )
-  const normalizedCoordinates = normalizeCoordinates(sample.coordinates)
+
   const recordsById = new Map(
     result.records.map((record) => [record.id, record]),
   )
-  const clusterLabelDisplayLimit = clusterLabelLimitCount(clusterLabelLimit)
-  const clusterLabelCandidates = metadataValues
-    .map((value) => {
-      const positions = result.ids.flatMap((id, index) => {
-        const metadataValue = recordsById.get(id)?.metadata?.[metadataField]
-        return metadataValue !== undefined && String(metadataValue) === value
-          ? [
-              {
-                x: normalizedCoordinates[index * 2],
-                y: normalizedCoordinates[index * 2 + 1],
-              },
-            ]
-          : []
-      })
-      return {
-        id: value,
-        label: value,
-        x:
-          positions.reduce((total, position) => total + position.x, 0) /
-          positions.length,
-        y:
-          positions.reduce((total, position) => total + position.y, 0) /
-          positions.length,
-        count: positions.length,
+
+  const clusterDominant = new Map<number, string>()
+  if (isDbscanColorBy && dbscan && metadataField) {
+    const clusterValueCounts = new Map<number, Map<string, number>>()
+    for (let i = 0; i < result.ids.length; i += 1) {
+      const cid = dbscan.assignments[i]
+      if (cid < 0) continue
+      const val = recordsById.get(result.ids[i])?.metadata?.[metadataField]
+      if (val === undefined || val === '') continue
+      const sv = String(val)
+      const vc = clusterValueCounts.get(cid) ?? new Map<string, number>()
+      vc.set(sv, (vc.get(sv) ?? 0) + 1)
+      clusterValueCounts.set(cid, vc)
+    }
+    for (const [cid, vc] of clusterValueCounts) {
+      let topVal = ''
+      let topCount = 0
+      let total = 0
+      for (const [v, c] of vc) {
+        total += c
+        if (c > topCount) { topCount = c; topVal = v }
       }
-    })
-    .filter(({ count }) => count > 0)
-    .sort(
-      (left, right) =>
-        right.count - left.count || left.label.localeCompare(right.label),
+      const pct = Math.round((topCount / total) * 100)
+      clusterDominant.set(cid, `${topVal} (${pct}%)`)
+    }
+  }
+
+  let pointColors: Record<string, string | undefined>
+  let legendEntries: AtlasLegendEntry[]
+
+  if (isDbscanColorBy && dbscan) {
+    const clusterCounts = new Map<number, number>()
+    for (let i = 0; i < result.ids.length; i += 1) {
+      const clusterId = dbscan.assignments[i]
+      if (clusterId >= 0) {
+        clusterCounts.set(clusterId, (clusterCounts.get(clusterId) ?? 0) + 1)
+      }
+    }
+    const clusterColorMap = new Map<number, string>()
+    let paletteIndex = 0
+    for (const clusterId of [...clusterCounts.keys()].sort((a, b) => a - b)) {
+      clusterColorMap.set(
+        clusterId,
+        metadataPalette[paletteIndex % metadataPalette.length],
+      )
+      paletteIndex += 1
+    }
+
+    pointColors = Object.fromEntries(
+      result.ids.flatMap((id, index) => {
+        const clusterId = dbscan.assignments[index]
+        const color = clusterColorMap.get(clusterId)
+        return color ? [[id, color]] : []
+      }),
     )
-  const clusterLabels: AtlasClusterLabel[] = spreadClusterLabels(
-    showClusterLabels &&
-      clusterLabelDisplayLimit > 0 &&
-      metadataValues.length >= MIN_CLUSTER_LABEL_COUNT
-      ? clusterLabelCandidates.slice(0, clusterLabelDisplayLimit)
-      : [],
-  )
+    legendEntries = [...clusterColorMap.entries()].map(
+      ([clusterId, color]) => {
+        const dominant = clusterDominant.get(clusterId)
+        return {
+          label: dominant
+            ? `Cluster ${clusterId} · ${dominant}`
+            : `Cluster ${clusterId}`,
+          color,
+          count: clusterCounts.get(clusterId) ?? 0,
+        }
+      },
+    )
+    const noiseCount = result.ids.filter(
+      (_, i) => dbscan.assignments[i] < 0,
+    ).length
+    if (noiseCount > 0) {
+      legendEntries.push({
+        label: 'Noise',
+        color: theme.semantic.color.text.neutral500,
+        count: noiseCount,
+        dimmed: true,
+      })
+    }
+  } else {
+    pointColors = Object.fromEntries(
+      result.records.flatMap(({ id, metadata }) => {
+        const value = metadata?.[metadataField]
+        const color =
+          value === undefined ? undefined : metadataColorMap.get(String(value))
+        return color ? [[id, color]] : []
+      }),
+    )
+    legendEntries = metadataValues
+      .filter((value) => metadataColorMap.has(value))
+      .map((value) => ({
+        label: value,
+        color: metadataColorMap.get(value)!,
+        count: result.records.filter(
+          (r) =>
+            r.metadata?.[metadataField] !== undefined &&
+            String(r.metadata[metadataField]) === value,
+        ).length,
+      }))
+  }
+
+  const handleLegendEntryClick = (label: string) => {
+    let matchingIds: string[]
+    if (isDbscanColorBy && dbscan) {
+      if (label === 'Noise') {
+        matchingIds = result.ids.filter((_, i) => dbscan.assignments[i] < 0)
+      } else {
+        const clusterId = Number(label.replace(/^Cluster (\d+).*/, '$1'))
+        matchingIds = result.ids.filter(
+          (_, i) => dbscan.assignments[i] === clusterId,
+        )
+      }
+    } else {
+      matchingIds = result.records
+        .filter(
+          ({ metadata }) =>
+            metadata?.[metadataField] !== undefined &&
+            String(metadata[metadataField]) === label,
+        )
+        .map(({ id }) => id)
+    }
+    onSelectedIdsChange(matchingIds)
+  }
+
+  const normalizedCoordinates = normalizeCoordinates(sample.coordinates)
+
+  let clusterLabels: AtlasClusterLabel[]
+  if (isDbscanColorBy && dbscan) {
+    const centroids = clusterCentroids(
+      normalizedCoordinates,
+      dbscan.assignments,
+      result.ids.length,
+    )
+    clusterLabels = spreadClusterLabels(
+      centroids.map((c) => {
+        const dominant = clusterDominant.get(c.clusterId)
+        return {
+          id: `dbscan-${c.clusterId}`,
+          label: dominant
+            ? `Cluster ${c.clusterId} · ${dominant}`
+            : `Cluster ${c.clusterId}`,
+          x: c.x,
+          y: c.y,
+          count: c.count,
+        }
+      }),
+    )
+  } else {
+    const clusterLabelDisplayLimit = clusterLabelLimitCount(clusterLabelLimit)
+    const clusterLabelCandidates = metadataValues
+      .map((value) => {
+        const positions = result.ids.flatMap((id, index) => {
+          const metadataValue = recordsById.get(id)?.metadata?.[metadataField]
+          return metadataValue !== undefined && String(metadataValue) === value
+            ? [
+                {
+                  x: normalizedCoordinates[index * 2],
+                  y: normalizedCoordinates[index * 2 + 1],
+                },
+              ]
+            : []
+        })
+        return {
+          id: value,
+          label: value,
+          x:
+            positions.reduce((total, position) => total + position.x, 0) /
+            positions.length,
+          y:
+            positions.reduce((total, position) => total + position.y, 0) /
+            positions.length,
+          count: positions.length,
+        }
+      })
+      .filter(({ count }) => count > 0)
+      .sort(
+        (left, right) =>
+          right.count - left.count || left.label.localeCompare(right.label),
+      )
+    clusterLabels = spreadClusterLabels(
+      showClusterLabels &&
+        clusterLabelDisplayLimit > 0 &&
+        metadataValues.length >= MIN_CLUSTER_LABEL_COUNT
+        ? clusterLabelCandidates.slice(0, clusterLabelDisplayLimit)
+        : [],
+    )
+  }
+
   return (
     <Col gap="l">
       <Atlas
@@ -470,6 +642,12 @@ const Explore = ({
         }}
         pointColors={pointColors}
         clusterLabels={clusterLabels}
+        legendEntries={legendEntries}
+        onLegendEntryClick={handleLegendEntryClick}
+        showMapLabels={mapLabelsVisible}
+        showDensity={densityVisible}
+        densityGrid={densityGridData}
+        densityGridSize={densitySize}
         interactionMode={mode === 'selection' ? 'region' : 'pan'}
         showEvidenceDetails={false}
         selectedIds={selectedIds}
@@ -684,6 +862,12 @@ export const VectorVisualizerPage = () => {
   const [compareStatus, setCompareStatus] = useState<
     CompareTuneStatus | undefined
   >('empty')
+  const [showDensity, setShowDensity] = useState(false)
+  const [densityGrid, setDensityGrid] = useState<Float32Array | null>(null)
+  const [densityGridSize, setDensityGridSize] = useState(64)
+  const [dbscanResult, setDbscanResult] = useState<DBSCANResult | null>(null)
+  const [showMapLabels, setShowMapLabels] = useState(false)
+
   const [advanced, setAdvanced] = useState<{
     status:
       | 'ready'
@@ -721,6 +905,25 @@ export const VectorVisualizerPage = () => {
     }),
     [t],
   )
+
+  useEffect(() => {
+    if (!sample) {
+      setDensityGrid(null)
+      setDbscanResult(null)
+      return
+    }
+    const { coordinates } = sample
+    const count = sample.result.ids.length
+    if (count < 2) return
+
+    const normalized = normalizeCoordinates(coordinates)
+    const gridSize = recommendGridSize(count)
+    setDensityGrid(computeDensityGrid(normalized, count, gridSize))
+    setDensityGridSize(gridSize)
+
+    const epsilon = autoEpsilon(normalized, count, DBSCAN_K)
+    setDbscanResult(computeDBSCAN(normalized, count, epsilon, DBSCAN_MIN_POINTS))
+  }, [sample])
 
   useEffect(() => {
     const nextSource = consumeVectorVisualizerSource()
@@ -1232,8 +1435,14 @@ export const VectorVisualizerPage = () => {
         selectedIds={selectedIds}
         onSelectedIdsChange={setSelectedIds}
         metadataField={metadataField}
+        colorByValue={metadataField || ''}
         showClusterLabels={showClusterLabels}
         clusterLabelLimit={clusterLabelLimit}
+        showDensity={showDensity}
+        densityGrid={densityGrid}
+        densityGridSize={densityGridSize}
+        dbscanResult={dbscanResult}
+        showMapLabels={showMapLabels}
       />
     ) : workflow === 'query-lab' ? (
       <Col gap="m">
@@ -1472,8 +1681,14 @@ export const VectorVisualizerPage = () => {
       selectedIds={selectedIds}
       onSelectedIdsChange={setSelectedIds}
       metadataField={metadataField}
+      colorByValue={metadataField || ''}
       showClusterLabels={showClusterLabels}
       clusterLabelLimit={clusterLabelLimit}
+      showDensity={showDensity}
+      densityGrid={densityGrid}
+      densityGridSize={densityGridSize}
+      dbscanResult={dbscanResult}
+      showMapLabels={showMapLabels}
     />
   )
   const neighborsView = (
@@ -1506,8 +1721,14 @@ export const VectorVisualizerPage = () => {
       selectedIds={selectedIds}
       onSelectedIdsChange={setSelectedIds}
       metadataField={metadataField}
+      colorByValue={metadataField || ''}
       showClusterLabels={showClusterLabels}
       clusterLabelLimit={clusterLabelLimit}
+      showDensity={showDensity}
+      densityGrid={densityGrid}
+      densityGridSize={densityGridSize}
+      dbscanResult={dbscanResult}
+      showMapLabels={showMapLabels}
       mode="selection"
     />
   )
@@ -1630,14 +1851,24 @@ export const VectorVisualizerPage = () => {
                   }),
             }}
             colorBy={
-              availableMetadataFields.length
+              availableMetadataFields.length || dbscanResult
                 ? {
                     label: t('vectorVisualizer.controls.colorBy.label'),
                     value: metadataField,
-                    options: availableMetadataFields.map((field) => ({
-                      label: field,
-                      value: field,
-                    })),
+                    options: [
+                      ...availableMetadataFields.map((field) => ({
+                        label: field,
+                        value: field,
+                      })),
+                      ...(dbscanResult
+                        ? [
+                            {
+                              label: `Clusters (DBSCAN) · ${dbscanResult.clusterCount}`,
+                              value: DBSCAN_COLOR_BY_VALUE,
+                            },
+                          ]
+                        : []),
+                    ],
                     onChange: setMetadataField,
                   }
                 : {
@@ -1705,6 +1936,22 @@ export const VectorVisualizerPage = () => {
                       if (isClusterLabelLimit(value))
                         setClusterLabelLimit(value)
                     },
+                  }
+                : undefined
+            }
+            densityHeatmap={
+              sample
+                ? {
+                    checked: showDensity,
+                    onChange: setShowDensity,
+                  }
+                : undefined
+            }
+            mapLabels={
+              sample
+                ? {
+                    checked: showMapLabels,
+                    onChange: setShowMapLabels,
                   }
                 : undefined
             }

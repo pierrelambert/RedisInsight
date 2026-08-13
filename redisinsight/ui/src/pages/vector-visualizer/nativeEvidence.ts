@@ -1,5 +1,8 @@
 import type { DriftEvidenceV1 } from 'uiSrc/packages/vector-visualizer/src/compare/compare'
-import type { XRayFact } from 'uiSrc/packages/vector-visualizer/src/types'
+import type {
+  XRayFact,
+  XRayFactSeverity,
+} from 'uiSrc/packages/vector-visualizer/src/types'
 
 interface NativeEvidenceSample {
   dimensions: number
@@ -14,6 +17,31 @@ interface NativeEvidenceSample {
     metadata?: Record<string, string | number | boolean>
   }>
 }
+
+const DUPLICATE_ATTENTION_THRESHOLD = 0.10
+const DUPLICATE_NOTICE_THRESHOLD = 0.05
+const OUTLIER_ATTENTION_THRESHOLD = 0.15
+const OUTLIER_NOTICE_THRESHOLD = 0.08
+const COVERAGE_ATTENTION_THRESHOLD = 0.50
+const COVERAGE_NOTICE_THRESHOLD = 0.80
+
+const rateSeverity = (
+  value: number,
+  attentionAbove: number,
+  noticeAbove: number,
+): XRayFactSeverity =>
+  value >= attentionAbove
+    ? 'attention'
+    : value >= noticeAbove
+      ? 'notice'
+      : 'success'
+
+const coverageSeverity = (value: number): XRayFactSeverity =>
+  value < COVERAGE_ATTENTION_THRESHOLD
+    ? 'attention'
+    : value < COVERAGE_NOTICE_THRESHOLD
+      ? 'notice'
+      : 'success'
 
 const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`
 
@@ -98,6 +126,12 @@ export const buildNativeXRayFacts = ({
       sampleCount: sample.sampleCount,
       freshness: sampleFreshness,
       status: sample.freshness === 'unknown' ? 'unknown' : 'candidate',
+      severity:
+        sample.freshness === 'fresh'
+          ? 'success'
+          : sample.freshness === 'unknown'
+            ? undefined
+            : 'attention',
     },
     {
       label: 'Duplicate candidate rate',
@@ -109,6 +143,14 @@ export const buildNativeXRayFacts = ({
       sampleCount: boundedCount,
       freshness: sampleFreshness,
       status: evidenceSampleCount === undefined ? 'unknown' : 'candidate',
+      severity:
+        evidenceSampleCount === undefined
+          ? undefined
+          : rateSeverity(
+              rate(duplicateIds, boundedCount),
+              DUPLICATE_ATTENTION_THRESHOLD,
+              DUPLICATE_NOTICE_THRESHOLD,
+            ),
     },
     {
       label: 'Outlier candidate rate',
@@ -120,6 +162,14 @@ export const buildNativeXRayFacts = ({
       sampleCount: boundedCount,
       freshness: sampleFreshness,
       status: evidenceSampleCount === undefined ? 'unknown' : 'candidate',
+      severity:
+        evidenceSampleCount === undefined
+          ? undefined
+          : rateSeverity(
+              rate(outlierIds, boundedCount),
+              OUTLIER_ATTENTION_THRESHOLD,
+              OUTLIER_NOTICE_THRESHOLD,
+            ),
     },
     {
       label: 'Metadata coverage',
@@ -132,6 +182,9 @@ export const buildNativeXRayFacts = ({
       sampleCount: sample.sampleCount,
       freshness: sampleFreshness,
       status: metadataField ? 'candidate' : 'unknown',
+      severity: metadataField
+        ? coverageSeverity(coverage(sample, metadataField))
+        : undefined,
     },
     {
       label: 'Query score distribution',
