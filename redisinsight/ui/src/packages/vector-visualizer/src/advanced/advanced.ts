@@ -92,7 +92,9 @@ export interface VectorSetProfile {
 export const parseSearchExecutionEvidence = (
   reply: unknown,
 ): SearchExecutionEvidence => {
-  const profileValue = recordValue(toRecord(reply), 'Profile')
+  const profileValue =
+    recordValue(toRecord(reply), 'Profile') ??
+    (Array.isArray(reply) && reply.length === 2 ? reply[1] : undefined)
   if (profileValue === undefined) return { kind: 'malformed' }
   const parsed = parseSearchProfile(reply)
   const facts = Object.fromEntries(

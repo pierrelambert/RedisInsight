@@ -1,15 +1,66 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
 import { RiBadge } from 'uiSrc/components/base/display/badge/RiBadge'
-import { Button } from 'uiSrc/components/base/forms/buttons'
-import { Col, Row } from 'uiSrc/components/base/layout/flex'
+import { Row } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 
-import type { SearchExecutionEvidence, VectorSetProfile } from '../advanced'
+import type {
+  SearchExecutionEvidence,
+  TopologyAdjacency,
+  VectorSetProfile,
+} from '../advanced'
+import { TopologyGraph } from '../TopologyGraph'
+import type { TopologyLayer } from '../TopologyGraph'
 import * as S from './AdvancedView.styles'
 import type { AdvancedProps } from './AdvancedView.types'
 
 const TechnicalValue = Text
+
+/**
+ * VLINKS returns one adjacency entry per (layer, source) pair. Group those
+ * entries into per-layer node/edge sets so TopologyGraph can lay each HNSW
+ * layer out as a graph rather than a flat list.
+ */
+const toTopologyLayers = (
+  adjacencies: TopologyAdjacency[],
+): TopologyLayer[] => {
+  const layerEntries = new Map<
+    number,
+    { edges: TopologyLayer['edges']; nodeIds: Set<string> }
+  >()
+
+  adjacencies.forEach(({ layer, source, targets }) => {
+    const entry = layerEntries.get(layer) ?? {
+      edges: [],
+      nodeIds: new Set<string>(),
+    }
+    entry.nodeIds.add(source)
+    targets.forEach((target) => {
+      entry.nodeIds.add(target)
+      entry.edges.push({ source, target })
+    })
+    layerEntries.set(layer, entry)
+  })
+
+  return [...layerEntries.entries()]
+    .sort(([layerA], [layerB]) => layerA - layerB)
+    .map(([layer, { edges, nodeIds }]) => {
+      const degreeById = new Map<string, number>()
+      edges.forEach(({ source, target }) => {
+        degreeById.set(source, (degreeById.get(source) ?? 0) + 1)
+        degreeById.set(target, (degreeById.get(target) ?? 0) + 1)
+      })
+
+      return {
+        edges,
+        layer,
+        nodes: [...nodeIds].map((id) => ({
+          degree: degreeById.get(id) ?? 0,
+          id,
+        })),
+      }
+    })
+}
 
 const statusCopy: Record<Exclude<AdvancedProps['status'], 'ready'>, string> = {
   'acl-unavailable': 'Redis ACLs do not allow this Advanced evidence.',
@@ -30,7 +81,11 @@ const StatusPanel = ({ status }: Pick<AdvancedProps, 'status'>) => {
 }
 
 const VectorSetTopology = ({ topology }: Pick<AdvancedProps, 'topology'>) => {
-  const [selectedId, setSelectedId] = useState<string | undefined>()
+  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>()
+  const layers = useMemo(
+    () => (topology.kind === 'ready' ? toTopologyLayers(topology.layers) : []),
+    [topology],
+  )
 
   if (topology.kind !== 'ready') {
     return (
@@ -53,22 +108,11 @@ const VectorSetTopology = ({ topology }: Pick<AdvancedProps, 'topology'>) => {
         Showing {topology.shownAdjacencies} of {topology.totalAdjacencies}{' '}
         adjacencies.
       </Text>
-      {topology.layers.map((layer) => (
-        <Col gap="s" key={`${layer.layer}-${layer.source}`}>
-          <TechnicalValue size="s">Layer {layer.layer}</TechnicalValue>
-          <Button
-            aria-pressed={selectedId === layer.source}
-            onClick={() => setSelectedId(layer.source)}
-            size="s"
-          >
-            Select {layer.source}
-          </Button>
-          {selectedId === layer.source && (
-            <Text role="status">Selected {layer.source}</Text>
-          )}
-          <TechnicalValue size="s">{layer.targets.join(', ')}</TechnicalValue>
-        </Col>
-      ))}
+      <TopologyGraph
+        layers={layers}
+        onNodeSelect={setSelectedNodeId}
+        selectedNodeId={selectedNodeId}
+      />
     </S.Panel>
   )
 }

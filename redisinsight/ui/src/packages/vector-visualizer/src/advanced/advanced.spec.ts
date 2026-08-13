@@ -95,4 +95,16 @@ describe('Advanced topology and profile evidence', () => {
       vectorMode: 'Unavailable',
     })
   })
+
+  it('parses RESP2 two-element FT.PROFILE response without keyed Profile field', () => {
+    expect(
+      parseSearchExecutionEvidence([
+        [1, 'doc:1', ['__vv_metric', '0.5']],
+        ['Total profile time', '2.5', 'Vector mode', 'BATCHES'],
+      ]),
+    ).toEqual({
+      kind: 'ready',
+      facts: { 'Total profile time': '2.5', 'Vector mode': 'BATCHES' },
+    })
+  })
 })
