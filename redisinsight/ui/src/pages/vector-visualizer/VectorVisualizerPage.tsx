@@ -91,6 +91,7 @@ import { VectorVisualizerControls } from './components/VectorVisualizerControls'
 import { VectorVisualizerNeighbors } from './components/VectorVisualizerNeighbors'
 import { VectorVisualizerResults } from './components/VectorVisualizerResults'
 import { VectorVisualizerWorkspace } from './components/VectorVisualizerWorkspace'
+import { HybridScoreChart } from './components/HybridScoreChart'
 
 const DBSCAN_COLOR_BY_VALUE = '__dbscan_clusters__'
 const DBSCAN_MIN_POINTS = 5
@@ -857,6 +858,41 @@ export const VectorVisualizerPage = () => {
   })
   const [query, setQuery] = useState(emptyQuery)
   const [queryAnchorId, setQueryAnchorId] = useState<string>()
+  const [queryMode, setQueryMode] = useState<
+    'knn' | 'range' | 'hybrid' | 'aggregate'
+  >('knn')
+  const [hybridVsimMode, setHybridVsimMode] = useState<'knn' | 'range'>('knn')
+  const [rangeRadius, setRangeRadius] = useState(0.5)
+  const [efRuntime, setEfRuntime] = useState<number | undefined>()
+  const [queryEpsilon, setQueryEpsilon] = useState<number | undefined>()
+  const [textQuery, setTextQuery] = useState('')
+  const [fusionMethod, setFusionMethod] = useState<'rrf' | 'linear'>('rrf')
+  const [rrfConstant, setRrfConstant] = useState<number | undefined>()
+  const [rrfWindow, setRrfWindow] = useState<number | undefined>()
+  const [linearAlpha, setLinearAlpha] = useState<number | undefined>()
+  const [linearBeta, setLinearBeta] = useState<number | undefined>()
+  const [hybridResult, setHybridResult] = useState<{
+    documents: Array<{
+      id: string
+      textScore: number
+      vectorScore: number
+      hybridScore: number
+      fields?: Record<string, string>
+    }>
+    totalResults: number
+  }>()
+  const [hybridPolicy, setHybridPolicy] = useState<
+    'AUTO' | 'BATCHES' | 'ADHOC_BF' | undefined
+  >()
+  const [batchSize, setBatchSize] = useState<number | undefined>()
+  const [searchWindowSize, setSearchWindowSize] = useState<number | undefined>()
+  const [shardKRatio, setShardKRatio] = useState<number | undefined>()
+  const [useSearchHistory, setUseSearchHistory] = useState<
+    'OFF' | 'ON' | 'AUTO' | undefined
+  >()
+  const [searchBufferCapacity, setSearchBufferCapacity] = useState<
+    number | undefined
+  >()
   const [manifests, setManifests] = useState<LocalManifestV1[]>([])
   const [benchmarkRuns, setBenchmarkRuns] = useState<BenchmarkRunV1[]>([])
   const [compareStatus, setCompareStatus] = useState<
@@ -867,6 +903,9 @@ export const VectorVisualizerPage = () => {
   const [densityGridSize, setDensityGridSize] = useState(64)
   const [dbscanResult, setDbscanResult] = useState<DBSCANResult | null>(null)
   const [showMapLabels, setShowMapLabels] = useState(false)
+  const [aggregateGroupByField, setAggregateGroupByField] = useState('')
+  const [aggregateReduceFunction, setAggregateReduceFunction] =
+    useState('COUNT')
 
   const [advanced, setAdvanced] = useState<{
     status:
@@ -985,6 +1024,7 @@ export const VectorVisualizerPage = () => {
     setHealthEvidence(undefined)
     setQuery(emptyQuery)
     setQueryAnchorId(undefined)
+    setHybridResult(undefined)
     setStatus('cancelled')
   }
   const sampleVectors = async () => {
@@ -1006,6 +1046,7 @@ export const VectorVisualizerPage = () => {
     setHealthEvidence(undefined)
     setQuery(emptyQuery)
     setQueryAnchorId(undefined)
+    setHybridResult(undefined)
     setStatus('fetching')
     try {
       const execute = createNativeReadOnlyExecutor({
@@ -1157,6 +1198,7 @@ export const VectorVisualizerPage = () => {
     if (!sample || !anchorId || !anchorVector || !connectedInstance.id) {
       setQuery({ ...emptyQuery, status: 'unsupported' })
       setQueryAnchorId(undefined)
+      setHybridResult(undefined)
       return
     }
     const work = session.beginWork()
@@ -1180,7 +1222,83 @@ export const VectorVisualizerPage = () => {
         signal: work.signal,
         generation: work.generation,
         accept: (generation) => session.accept(generation, null),
+        queryMode,
+        radius: queryMode === 'range' ? rangeRadius : undefined,
+        epsilon: queryMode === 'range' ? queryEpsilon : undefined,
+        efRuntime: queryMode === 'knn' ? efRuntime : undefined,
+        hybridPolicy: queryMode === 'knn' ? hybridPolicy : undefined,
+        batchSize:
+          queryMode === 'knn' && hybridPolicy === 'BATCHES'
+            ? batchSize
+            : undefined,
+        searchWindowSize,
+        shardKRatio,
+        useSearchHistory,
+        searchBufferCapacity,
+        textQuery: queryMode === 'hybrid' ? textQuery : undefined,
+        fusionMethod: queryMode === 'hybrid' ? fusionMethod : undefined,
+        rrfConstant:
+          queryMode === 'hybrid' && fusionMethod === 'rrf'
+            ? rrfConstant
+            : undefined,
+        rrfWindow:
+          queryMode === 'hybrid' && fusionMethod === 'rrf'
+            ? rrfWindow
+            : undefined,
+        linearAlpha:
+          queryMode === 'hybrid' && fusionMethod === 'linear'
+            ? linearAlpha
+            : undefined,
+        linearBeta:
+          queryMode === 'hybrid' && fusionMethod === 'linear'
+            ? linearBeta
+            : undefined,
+        hybridVsimMode: queryMode === 'hybrid' ? hybridVsimMode : undefined,
+        filter:
+          queryMode === 'hybrid'
+            ? filterExpression.trim() || undefined
+            : undefined,
+        aggregateGroupByFields:
+          queryMode === 'aggregate' && aggregateGroupByField
+            ? [aggregateGroupByField]
+            : undefined,
+        aggregateReduceOps:
+          queryMode === 'aggregate'
+            ? [
+                {
+                  function: aggregateReduceFunction,
+                  alias:
+                    aggregateReduceFunction.toLowerCase() === 'count'
+                      ? 'count'
+                      : `${aggregateReduceFunction.toLowerCase()}_value`,
+                  ...(aggregateReduceFunction !== 'COUNT' &&
+                  aggregateGroupByField
+                    ? { field: aggregateGroupByField }
+                    : {}),
+                },
+              ]
+            : undefined,
       })
+      if (result.kind === 'hybrid-ready') {
+        setHybridResult({
+          documents: result.documents,
+          totalResults: result.totalResults,
+        })
+        setQuery({
+          ...emptyQuery,
+          status: result.documents.length ? 'ready' : 'empty',
+        })
+        return
+      }
+      if (result.kind === 'aggregate-ready') {
+        setQuery({
+          ...emptyQuery,
+          status: result.groups.length ? 'ready' : 'empty',
+        })
+        setHybridResult(undefined)
+        return
+      }
+      setHybridResult(undefined)
       if (result.kind !== 'ready') {
         setQuery({ ...emptyQuery, status: result.kind })
         return
@@ -1190,6 +1308,19 @@ export const VectorVisualizerPage = () => {
         status: result.neighbors.length ? 'ready' : 'empty',
       })
     } catch (error) {
+      if (
+        queryMode === 'hybrid' &&
+        error instanceof Error &&
+        (error.message.includes('unknown command') ||
+          error.message.includes('ERR unknown'))
+      ) {
+        setQuery({
+          ...emptyQuery,
+          status: 'unsupported',
+        })
+        setHybridResult(undefined)
+        return
+      }
       setQuery({
         ...emptyQuery,
         status:
@@ -1446,6 +1577,382 @@ export const VectorVisualizerPage = () => {
       />
     ) : workflow === 'query-lab' ? (
       <Col gap="m">
+        {sourceKind === 'search-index' && (
+          <Row align="center" gap="s">
+            <Text size="S">Query mode</Text>
+            <Button
+              size="s"
+              variant={queryMode === 'knn' ? 'primary' : 'secondary-fill'}
+              onClick={() => setQueryMode('knn')}
+            >
+              KNN
+            </Button>
+            <Button
+              size="s"
+              variant={queryMode === 'range' ? 'primary' : 'secondary-fill'}
+              onClick={() => setQueryMode('range')}
+            >
+              Range
+            </Button>
+            <Button
+              size="s"
+              variant={queryMode === 'hybrid' ? 'primary' : 'secondary-fill'}
+              onClick={() => setQueryMode('hybrid')}
+            >
+              Hybrid
+            </Button>
+            <Button
+              size="s"
+              variant={queryMode === 'aggregate' ? 'primary' : 'secondary-fill'}
+              onClick={() => setQueryMode('aggregate')}
+            >
+              Aggregate
+            </Button>
+          </Row>
+        )}
+        {sourceKind === 'search-index' && queryMode === 'hybrid' && (
+          <Col gap="s">
+            <Row align="center" gap="s">
+              <Text size="S">Text query</Text>
+              <input
+                type="text"
+                value={textQuery}
+                placeholder="*"
+                onChange={(event) => setTextQuery(event.target.value)}
+                style={{ width: 200 }}
+              />
+            </Row>
+            <Row align="center" gap="s">
+              <Text size="S">VSIM mode</Text>
+              <Button
+                size="s"
+                variant={
+                  hybridVsimMode === 'knn' ? 'primary' : 'secondary-fill'
+                }
+                onClick={() => setHybridVsimMode('knn')}
+              >
+                KNN
+              </Button>
+              <Button
+                size="s"
+                variant={
+                  hybridVsimMode === 'range' ? 'primary' : 'secondary-fill'
+                }
+                onClick={() => setHybridVsimMode('range')}
+              >
+                Range
+              </Button>
+            </Row>
+            <Row align="center" gap="s">
+              <Text size="S">Fusion</Text>
+              <Button
+                size="s"
+                variant={fusionMethod === 'rrf' ? 'primary' : 'secondary-fill'}
+                onClick={() => setFusionMethod('rrf')}
+              >
+                RRF
+              </Button>
+              <Button
+                size="s"
+                variant={
+                  fusionMethod === 'linear' ? 'primary' : 'secondary-fill'
+                }
+                onClick={() => setFusionMethod('linear')}
+              >
+                Linear
+              </Button>
+            </Row>
+            {fusionMethod === 'rrf' && (
+              <Row align="center" gap="s">
+                <Text size="S">WINDOW</Text>
+                <input
+                  type="number"
+                  min={1}
+                  value={rrfWindow ?? ''}
+                  placeholder="20"
+                  onChange={(event) => {
+                    const nextWindow = Number(event.target.value)
+                    setRrfWindow(
+                      Number.isFinite(nextWindow) && nextWindow > 0
+                        ? nextWindow
+                        : undefined,
+                    )
+                  }}
+                  style={{ width: 80 }}
+                />
+                <Text size="S">CONSTANT</Text>
+                <input
+                  type="number"
+                  min={1}
+                  value={rrfConstant ?? ''}
+                  placeholder="60"
+                  onChange={(event) => {
+                    const nextConstant = Number(event.target.value)
+                    setRrfConstant(
+                      Number.isFinite(nextConstant) && nextConstant > 0
+                        ? nextConstant
+                        : undefined,
+                    )
+                  }}
+                  style={{ width: 80 }}
+                />
+              </Row>
+            )}
+            {fusionMethod === 'linear' && (
+              <Row align="center" gap="s">
+                <Text size="S">ALPHA</Text>
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={linearAlpha ?? ''}
+                  placeholder="0.5"
+                  onChange={(event) => {
+                    const nextAlpha = Number(event.target.value)
+                    setLinearAlpha(
+                      Number.isFinite(nextAlpha) ? nextAlpha : undefined,
+                    )
+                  }}
+                  style={{ width: 80 }}
+                />
+                <Text size="S">BETA</Text>
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={linearBeta ?? ''}
+                  placeholder="0.5"
+                  onChange={(event) => {
+                    const nextBeta = Number(event.target.value)
+                    setLinearBeta(
+                      Number.isFinite(nextBeta) ? nextBeta : undefined,
+                    )
+                  }}
+                  style={{ width: 80 }}
+                />
+              </Row>
+            )}
+          </Col>
+        )}
+        {sourceKind === 'search-index' && queryMode === 'range' && (
+          <Row align="center" gap="s">
+            <Text size="S">RADIUS</Text>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={rangeRadius}
+              onChange={(event) => {
+                const nextRadius = Number(event.target.value)
+                setRangeRadius(
+                  Number.isFinite(nextRadius) && nextRadius > 0
+                    ? nextRadius
+                    : rangeRadius,
+                )
+              }}
+              style={{ width: 80 }}
+            />
+            <Text size="S">EPSILON</Text>
+            <input
+              type="number"
+              min={0.001}
+              max={1}
+              step={0.001}
+              value={queryEpsilon ?? ''}
+              placeholder="default"
+              onChange={(event) => {
+                const nextEpsilon = Number(event.target.value)
+                setQueryEpsilon(
+                  Number.isFinite(nextEpsilon) && nextEpsilon > 0
+                    ? nextEpsilon
+                    : undefined,
+                )
+              }}
+              style={{ width: 80 }}
+            />
+          </Row>
+        )}
+        {sourceKind === 'search-index' && queryMode === 'aggregate' && (
+          <Col gap="s">
+            <Row align="center" gap="s">
+              <Text size="S">GROUPBY field</Text>
+              <input
+                type="text"
+                value={aggregateGroupByField}
+                placeholder="category"
+                onChange={(event) =>
+                  setAggregateGroupByField(event.target.value)
+                }
+                style={{ width: 160 }}
+              />
+            </Row>
+            <Row align="center" gap="s">
+              <Text size="S">REDUCE</Text>
+              <select
+                value={aggregateReduceFunction}
+                onChange={(event) =>
+                  setAggregateReduceFunction(event.target.value)
+                }
+              >
+                <option value="COUNT">COUNT</option>
+                <option value="AVG">AVG</option>
+                <option value="SUM">SUM</option>
+                <option value="MIN">MIN</option>
+                <option value="MAX">MAX</option>
+              </select>
+            </Row>
+          </Col>
+        )}
+        {sourceKind === 'search-index' &&
+          queryMode === 'knn' &&
+          sample?.result.algorithm === 'hnsw' && (
+            <Row align="center" gap="s">
+              <Text size="S">EF_RUNTIME</Text>
+              <input
+                type="number"
+                min={1}
+                max={4096}
+                value={efRuntime ?? ''}
+                placeholder="default"
+                onChange={(event) => {
+                  const nextEfRuntime = Number(event.target.value)
+                  setEfRuntime(
+                    Number.isFinite(nextEfRuntime) && nextEfRuntime > 0
+                      ? nextEfRuntime
+                      : undefined,
+                  )
+                }}
+                style={{ width: 80 }}
+              />
+            </Row>
+          )}
+        {sourceKind === 'search-index' &&
+          (sample?.result.algorithm?.includes('svs') ||
+            sample?.result.algorithm?.includes('vamana')) && (
+            <Row align="center" gap="s">
+              <Text size="S">SEARCH_WINDOW_SIZE</Text>
+              <input
+                type="number"
+                min={1}
+                max={4096}
+                value={searchWindowSize ?? ''}
+                placeholder="default"
+                onChange={(event) => {
+                  const nextSearchWindowSize = Number(event.target.value)
+                  setSearchWindowSize(
+                    Number.isFinite(nextSearchWindowSize) &&
+                      nextSearchWindowSize > 0
+                      ? nextSearchWindowSize
+                      : undefined,
+                  )
+                }}
+                style={{ width: 80 }}
+              />
+            </Row>
+          )}
+        {sourceKind === 'search-index' && queryMode === 'knn' && (
+          <Row align="center" gap="s">
+            <Text size="S">HYBRID_POLICY</Text>
+            <select
+              value={hybridPolicy ?? ''}
+              onChange={(event) => {
+                const nextHybridPolicy = event.target.value
+                setHybridPolicy(
+                  nextHybridPolicy === 'AUTO' ||
+                    nextHybridPolicy === 'BATCHES' ||
+                    nextHybridPolicy === 'ADHOC_BF'
+                    ? nextHybridPolicy
+                    : undefined,
+                )
+              }}
+            >
+              <option value="">default</option>
+              <option value="AUTO">AUTO</option>
+              <option value="BATCHES">BATCHES</option>
+              <option value="ADHOC_BF">ADHOC_BF</option>
+            </select>
+            {hybridPolicy === 'BATCHES' && (
+              <Row align="center" gap="s">
+                <Text size="S">BATCH_SIZE</Text>
+                <input
+                  type="number"
+                  min={1}
+                  value={batchSize ?? ''}
+                  placeholder="default"
+                  onChange={(event) => {
+                    const nextBatchSize = Number(event.target.value)
+                    setBatchSize(
+                      Number.isFinite(nextBatchSize) && nextBatchSize > 0
+                        ? nextBatchSize
+                        : undefined,
+                    )
+                  }}
+                  style={{ width: 80 }}
+                />
+              </Row>
+            )}
+          </Row>
+        )}
+        {sourceKind === 'search-index' && (
+          <Row align="center" gap="s">
+            <Text size="S">SHARD_K_RATIO</Text>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              value={shardKRatio ?? ''}
+              placeholder="default"
+              onChange={(event) => {
+                const nextShardKRatio = Number(event.target.value)
+                setShardKRatio(
+                  Number.isFinite(nextShardKRatio) && nextShardKRatio > 0
+                    ? nextShardKRatio
+                    : undefined,
+                )
+              }}
+              style={{ width: 80 }}
+            />
+            <Text size="S">USE_SEARCH_HISTORY</Text>
+            <select
+              value={useSearchHistory ?? ''}
+              onChange={(event) => {
+                const nextUseSearchHistory = event.target.value
+                setUseSearchHistory(
+                  nextUseSearchHistory === 'OFF' ||
+                    nextUseSearchHistory === 'ON' ||
+                    nextUseSearchHistory === 'AUTO'
+                    ? nextUseSearchHistory
+                    : undefined,
+                )
+              }}
+            >
+              <option value="">default</option>
+              <option value="OFF">OFF</option>
+              <option value="ON">ON</option>
+              <option value="AUTO">AUTO</option>
+            </select>
+            <Text size="S">SEARCH_BUFFER_CAPACITY</Text>
+            <input
+              type="number"
+              min={1}
+              value={searchBufferCapacity ?? ''}
+              placeholder="default"
+              onChange={(event) => {
+                const nextSearchBufferCapacity = Number(event.target.value)
+                setSearchBufferCapacity(
+                  Number.isFinite(nextSearchBufferCapacity) &&
+                    nextSearchBufferCapacity > 0
+                    ? nextSearchBufferCapacity
+                    : undefined,
+                )
+              }}
+              style={{ width: 80 }}
+            />
+          </Row>
+        )}
         <Button
           disabled={!selectedIds[0] || !sample}
           onClick={() => void runQuery()}
@@ -1454,7 +1961,16 @@ export const VectorVisualizerPage = () => {
         </Button>
         <Text color="subdued">
           {t('vectorVisualizer.queryLab.runDescription', {
-            command: sourceKind === 'search-index' ? 'KNN' : 'VSIM',
+            command:
+              sourceKind === 'search-index'
+                ? queryMode === 'range'
+                  ? 'VECTOR_RANGE'
+                  : queryMode === 'hybrid'
+                    ? 'FT.HYBRID'
+                    : queryMode === 'aggregate'
+                      ? 'FT.AGGREGATE'
+                      : 'KNN'
+                : 'VSIM',
           })}
         </Text>
         {!sample ? (
@@ -1500,6 +2016,11 @@ export const VectorVisualizerPage = () => {
           focusedId={selectedIds[0]}
           onSelectionChange={setSelectedIds}
         />
+        {queryMode === 'hybrid' &&
+          hybridResult &&
+          hybridResult.documents.length > 0 && (
+            <HybridScoreChart documents={hybridResult.documents} />
+          )}
       </Col>
     ) : workflow === 'health' ? (
       <Health
