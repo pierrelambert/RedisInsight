@@ -10,6 +10,7 @@ export type {
   Freshness,
   OutlierExplorerProps,
   XRayFact,
+  XRayFactSeverity,
 } from '../health/HealthExplorers'
 export type { QueryLabProps } from '../query-lab/QueryLab'
 export type { SelectionInspectorProps } from '../selection/SelectionInspector'

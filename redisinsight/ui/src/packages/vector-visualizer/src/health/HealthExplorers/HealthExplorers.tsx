@@ -22,12 +22,15 @@ const freshnessCopy = (freshness: Freshness) =>
 const factStatusCopy = (status: XRayFact['status']) =>
   status === 'candidate' ? 'Sampled candidate' : status
 
-const factSeverity = (status: XRayFact['status']): S.HealthTileSeverity =>
+const statusSeverity = (status: XRayFact['status']): S.HealthTileSeverity =>
   status === 'candidate'
     ? 'notice'
     : status === 'unknown'
       ? 'attention'
       : 'neutral'
+
+const factSeverity = (fact: XRayFact): S.HealthTileSeverity =>
+  fact.severity ?? statusSeverity(fact.status)
 
 const factTestId = (label: string) =>
   `health-metric-tile-${label
@@ -63,7 +66,7 @@ export const XRay = ({ facts }: { facts: XRayFact[] }) => (
     ) : (
       <S.MetricGrid>
         {facts.map((fact) => {
-          const severity = factSeverity(fact.status)
+          const severity = factSeverity(fact)
           return (
             <S.MetricTile
               $severity={severity}
@@ -82,9 +85,11 @@ export const XRay = ({ facts }: { facts: XRayFact[] }) => (
                   color={
                     severity === 'attention'
                       ? 'attention'
-                      : severity === 'notice'
-                        ? 'notice'
-                        : 'subdued'
+                      : severity === 'success'
+                        ? 'success'
+                        : severity === 'notice'
+                          ? 'notice'
+                          : 'subdued'
                   }
                 >
                   {factStatusCopy(fact.status)}

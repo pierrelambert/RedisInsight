@@ -4,4 +4,5 @@ export type {
   Freshness,
   OutlierExplorerProps,
   XRayFact,
+  XRayFactSeverity,
 } from './HealthExplorers.types'

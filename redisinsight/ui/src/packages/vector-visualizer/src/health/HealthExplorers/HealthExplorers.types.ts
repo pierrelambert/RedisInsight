@@ -6,6 +6,8 @@ import type {
 
 export type Freshness = 'fresh' | 'stale' | 'changed-while-sampled'
 
+export type XRayFactSeverity = 'success' | 'notice' | 'attention' | 'neutral'
+
 export interface XRayFact {
   label: string
   value: string
@@ -13,6 +15,7 @@ export interface XRayFact {
   sampleCount: number
   freshness: Freshness
   status: 'candidate' | 'unknown' | 'unavailable'
+  severity?: XRayFactSeverity
 }
 
 export interface DuplicateExplorerProps {
