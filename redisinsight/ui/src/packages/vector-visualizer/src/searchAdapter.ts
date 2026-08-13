@@ -1,9 +1,16 @@
 import {
+  AggregateQueryInput,
+  AggregateResult,
+  AggregateResultGroup,
   asNumber,
   asText,
   CommandPlan,
   EvidenceProvenance,
+  HybridQueryInput,
+  HybridQueryResult,
+  HybridScoreDocument,
   NormalizedNeighbor,
+  RedisArgument,
   recordValue,
   toRecord,
   VectorMetric,
@@ -25,6 +32,48 @@ export const SEARCH_CAPABILITIES: VectorSourceCapabilities = {
 const measuredUnknown: EvidenceProvenance = {
   kind: 'measured',
   exactness: 'unknown',
+}
+
+/** Query-time runtime tuning knobs threaded into the FT.SEARCH PARAMS section. */
+interface RuntimeQueryParams {
+  efRuntime?: number
+  hybridPolicy?: 'AUTO' | 'BATCHES' | 'ADHOC_BF'
+  batchSize?: number
+  searchWindowSize?: number
+  shardKRatio?: number
+  useSearchHistory?: 'OFF' | 'ON' | 'AUTO'
+  searchBufferCapacity?: number
+}
+
+/** Builds the extra PARAMS name/value token pairs for runtime query tuning. */
+const buildRuntimeParamTokens = (
+  runtimeParams?: RuntimeQueryParams,
+): RedisArgument[] => {
+  if (!runtimeParams) return []
+  const {
+    efRuntime,
+    hybridPolicy,
+    batchSize,
+    searchWindowSize,
+    shardKRatio,
+    useSearchHistory,
+    searchBufferCapacity,
+  } = runtimeParams
+  const extraParams: [string, string][] = []
+  if (efRuntime !== undefined)
+    extraParams.push(['EF_RUNTIME', String(efRuntime)])
+  if (hybridPolicy) extraParams.push(['HYBRID_POLICY', hybridPolicy])
+  if (batchSize !== undefined)
+    extraParams.push(['BATCH_SIZE', String(batchSize)])
+  if (searchWindowSize !== undefined)
+    extraParams.push(['SEARCH_WINDOW_SIZE', String(searchWindowSize)])
+  if (shardKRatio !== undefined)
+    extraParams.push(['$SHARD_K_RATIO', String(shardKRatio)])
+  if (useSearchHistory)
+    extraParams.push(['USE_SEARCH_HISTORY', useSearchHistory])
+  if (searchBufferCapacity !== undefined)
+    extraParams.push(['SEARCH_BUFFER_CAPACITY', String(searchBufferCapacity)])
+  return extraParams.flat()
 }
 const plan = (
   command: string,
@@ -76,6 +125,7 @@ export const planSearchNeighbors = ({
   queryParameter,
   vector,
   limit,
+  runtimeParams,
 }: {
   index: string
   vectorField: string
@@ -83,21 +133,144 @@ export const planSearchNeighbors = ({
   queryParameter: string
   vector: Uint8Array
   limit: number
+  runtimeParams?: RuntimeQueryParams
 }): CommandPlan => {
   const query = `${filter ? `(${filter})` : '*'}=>[KNN ${limit} @${vectorField} $${queryParameter} AS __vv_metric]`
+  const extraParamTokens = buildRuntimeParamTokens(runtimeParams)
   return plan('FT.SEARCH', [
     index,
     query,
     'PARAMS',
-    '2',
+    String(2 + extraParamTokens.length),
     queryParameter,
     vector,
+    ...extraParamTokens,
     'SORTBY',
     '__vv_metric',
     'ASC',
     'RETURN',
     '1',
     '__vv_metric',
+    'DIALECT',
+    '2',
+  ])
+}
+
+const buildRangeQuery = ({
+  vectorField,
+  filter,
+  queryParameter,
+  radius,
+  epsilon,
+}: {
+  vectorField: string
+  filter?: string
+  queryParameter: string
+  radius: number
+  epsilon?: number
+}): string => {
+  const attributes = [
+    '$YIELD_DISTANCE_AS: __vv_metric',
+    ...(epsilon !== undefined ? [`$EPSILON: ${epsilon}`] : []),
+  ].join('; ')
+  const rangeClause = `@${vectorField}:[VECTOR_RANGE ${radius} $${queryParameter}]=>{${attributes}}`
+  return filter ? `(${filter}) ${rangeClause}` : rangeClause
+}
+
+export const planRangeQuery = ({
+  index,
+  vectorField,
+  filter,
+  queryParameter,
+  vector,
+  radius,
+  epsilon,
+  limit = 200,
+  runtimeParams,
+}: {
+  index: string
+  vectorField: string
+  filter?: string
+  queryParameter: string
+  vector: Uint8Array
+  radius: number
+  epsilon?: number
+  limit?: number
+  runtimeParams?: RuntimeQueryParams
+}): CommandPlan => {
+  const query = buildRangeQuery({
+    vectorField,
+    filter,
+    queryParameter,
+    radius,
+    epsilon,
+  })
+  const extraParamTokens = buildRuntimeParamTokens(runtimeParams)
+  return plan('FT.SEARCH', [
+    index,
+    query,
+    'PARAMS',
+    String(2 + extraParamTokens.length),
+    queryParameter,
+    vector,
+    ...extraParamTokens,
+    'SORTBY',
+    '__vv_metric',
+    'ASC',
+    'LIMIT',
+    '0',
+    String(limit),
+    'DIALECT',
+    '2',
+  ])
+}
+
+export const planProfileRangeQuery = ({
+  index,
+  vectorField,
+  filter,
+  queryParameter,
+  vector,
+  radius,
+  epsilon,
+  limit = 200,
+  runtimeParams,
+}: {
+  index: string
+  vectorField: string
+  filter?: string
+  queryParameter: string
+  vector: Uint8Array
+  radius: number
+  epsilon?: number
+  limit?: number
+  runtimeParams?: RuntimeQueryParams
+}): CommandPlan => {
+  const query = buildRangeQuery({
+    vectorField,
+    filter,
+    queryParameter,
+    radius,
+    epsilon,
+  })
+  const extraParamTokens = buildRuntimeParamTokens(runtimeParams)
+  return plan('FT.PROFILE', [
+    index,
+    'SEARCH',
+    'LIMITED',
+    'QUERY',
+    query,
+    'PARAMS',
+    String(2 + extraParamTokens.length),
+    queryParameter,
+    vector,
+    ...extraParamTokens,
+    'SORTBY',
+    '__vv_metric',
+    'ASC',
+    'LIMIT',
+    '0',
+    String(limit),
     'DIALECT',
     '2',
   ])
@@ -113,6 +286,7 @@ export const planProfileSearchNeighbors = ({
   queryParameter,
   vector,
   limit,
+  runtimeParams,
 }: {
   index: string
   vectorField: string
@@ -120,8 +294,10 @@ export const planProfileSearchNeighbors = ({
   queryParameter: string
   vector: Uint8Array
   limit: number
+  runtimeParams?: RuntimeQueryParams
 }): CommandPlan => {
   const query = `${filter ? `(${filter})` : '*'}=>[KNN ${limit} @${vectorField} $${queryParameter} AS __vv_metric]`
+  const extraParamTokens = buildRuntimeParamTokens(runtimeParams)
   return plan('FT.PROFILE', [
     index,
     'SEARCH',
@@ -129,9 +305,10 @@ export const planProfileSearchNeighbors = ({
     'QUERY',
     query,
     'PARAMS',
-    '2',
+    String(2 + extraParamTokens.length),
     queryParameter,
     vector,
+    ...extraParamTokens,
     'SORTBY',
     '__vv_metric',
     'ASC',
@@ -149,6 +326,14 @@ export interface SearchVectorField {
   metric?: VectorMetric
   algorithm?: string
   dataType?: string
+  /** SVS-VAMANA compression type (LVQ8, LVQ4, LVQ4x4, LVQ4x8, LeanVec4x8, LeanVec8x8). */
+  compression?: string
+  /** SVS-VAMANA GRAPH_MAX_DEGREE. */
+  graphMaxDegree?: number
+  /** SVS-VAMANA SEARCH_WINDOW_SIZE (query-time default). */
+  searchWindowSize?: number
+  /** SVS-VAMANA TRAINING_THRESHOLD. */
+  trainingThreshold?: number
 }
 
 export interface SearchSampleField {
@@ -377,6 +562,12 @@ export const parseSearchInfo = (reply: unknown) => {
               : undefined,
           algorithm: asText(recordValue(data, 'algorithm'))?.toLowerCase(),
           dataType: asText(recordValue(data, 'data_type')),
+          compression:
+            asText(recordValue(data, 'compression'))?.toUpperCase() ??
+            undefined,
+          graphMaxDegree: asNumber(recordValue(data, 'graph_max_degree')),
+          searchWindowSize: asNumber(recordValue(data, 'search_window_size')),
+          trainingThreshold: asNumber(recordValue(data, 'training_threshold')),
         } satisfies SearchVectorField,
       ]
     })
@@ -591,4 +782,250 @@ export const parseSearchProfile = (reply: unknown) => {
     }),
   )
   return { kind: 'full' as const, stages, facts: factEntries }
+}
+
+export const planAggregateQuery = (input: AggregateQueryInput): CommandPlan => {
+  const args: RedisArgument[] = [input.index, input.baseQuery]
+
+  // LOAD - expose fields needed for GROUPBY
+  if (input.loadFields && input.loadFields.length > 0) {
+    args.push('LOAD', String(input.loadFields.length))
+    input.loadFields.forEach((field) => args.push(`@${field}`))
+  }
+
+  // GROUPBY
+  args.push('GROUPBY', String(input.groupByFields.length))
+  input.groupByFields.forEach((field) => args.push(`@${field}`))
+
+  // REDUCE ops
+  for (const op of input.reduceOps) {
+    args.push('REDUCE', op.function)
+    const extraArgs = op.args ?? []
+    if (op.field) {
+      args.push(String(1 + extraArgs.length), `@${op.field}`, ...extraArgs)
+    } else {
+      args.push(String(extraArgs.length), ...extraArgs)
+    }
+    args.push('AS', op.alias)
+  }
+
+  // SORTBY (FT.AGGREGATE uses SORTBY nargs convention: SORTBY 2 @field ASC)
+  if (input.sortBy) {
+    args.push('SORTBY', '2', `@${input.sortBy.field}`, input.sortBy.order)
+  }
+
+  // LIMIT
+  if (input.limit !== undefined) {
+    args.push('LIMIT', '0', String(input.limit))
+  }
+
+  // PARAMS for vector blob
+  args.push('PARAMS', '2', input.queryParameter, input.vector)
+
+  // DIALECT
+  args.push('DIALECT', '2')
+
+  return plan('FT.AGGREGATE', args)
+}
+
+const coerceGroupValue = (
+  group: AggregateResultGroup,
+  key: string,
+  value: unknown,
+) => {
+  const num = asNumber(value)
+  if (num !== undefined) {
+    group[key] = num
+    return
+  }
+  const text = asText(value)
+  if (text !== undefined) group[key] = text
+}
+
+export const parseAggregateResponse = (reply: unknown): AggregateResult => {
+  // Try RESP3 format first
+  const resp3 = toRecord(reply)
+  const results = recordValue(resp3, 'results')
+  if (Array.isArray(results)) {
+    const groups: AggregateResultGroup[] = results.map((result) => {
+      const row = toRecord(result)
+      const attributes = toRecord(
+        recordValue(row, 'extra_attributes') ??
+          recordValue(row, 'attributes') ??
+          result,
+      )
+      const group: AggregateResultGroup = {}
+      for (const [key, value] of Object.entries(attributes)) {
+        coerceGroupValue(group, key, value)
+      }
+      return group
+    })
+    const totalGroups = asNumber(recordValue(resp3, 'total_results')) ?? groups.length
+    return { groups, totalGroups }
+  }
+
+  // RESP2 format: [count, [f, v, f, v, ...], ...]
+  const rows = Array.isArray(reply) ? reply : []
+  const totalGroups = asNumber(rows[0]) ?? 0
+  const groups: AggregateResultGroup[] = []
+  for (let index = 1; index < rows.length; index += 1) {
+    const record = toRecord(rows[index])
+    const group: AggregateResultGroup = {}
+    for (const [key, value] of Object.entries(record)) {
+      coerceGroupValue(group, key, value)
+    }
+    groups.push(group)
+  }
+  return { groups, totalGroups }
+}
+
+const HYBRID_TEXT_SCORE_FIELD = 'text_score'
+const HYBRID_VECTOR_SCORE_FIELD = 'vector_score'
+const HYBRID_SCORE_FIELD = 'hybrid_score'
+const HYBRID_SCORE_FIELDS = [
+  HYBRID_TEXT_SCORE_FIELD,
+  HYBRID_VECTOR_SCORE_FIELD,
+  HYBRID_SCORE_FIELD,
+]
+
+export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
+  const args: RedisArgument[] = [input.index]
+
+  // SEARCH clause
+  args.push(
+    'SEARCH',
+    input.textQuery,
+    'YIELD_SCORE_AS',
+    HYBRID_TEXT_SCORE_FIELD,
+  )
+
+  // VSIM clause
+  args.push('VSIM', `@${input.vectorField}`, `$${input.queryParameter}`)
+
+  if (input.vsimMode === 'knn') {
+    const knnArgs: string[] = ['K', String(input.limit)]
+    if (input.efRuntime !== undefined)
+      knnArgs.push('EF_RUNTIME', String(input.efRuntime))
+    if (input.searchWindowSize !== undefined)
+      knnArgs.push('SEARCH_WINDOW_SIZE', String(input.searchWindowSize))
+    if (input.shardKRatio !== undefined)
+      knnArgs.push('SHARD_K_RATIO', String(input.shardKRatio))
+    args.push('KNN', String(knnArgs.length), ...knnArgs)
+  } else {
+    const rangeArgs: string[] = ['RADIUS', String(input.radius ?? 0.5)]
+    if (input.epsilon !== undefined)
+      rangeArgs.push('EPSILON', String(input.epsilon))
+    args.push('RANGE', String(rangeArgs.length), ...rangeArgs)
+  }
+  args.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
+
+  // COMBINE clause
+  if (input.fusionMethod === 'rrf') {
+    const rrfArgs: string[] = []
+    if (input.rrfConstant !== undefined)
+      rrfArgs.push('CONSTANT', String(input.rrfConstant))
+    if (input.rrfWindow !== undefined)
+      rrfArgs.push('WINDOW', String(input.rrfWindow))
+    args.push('COMBINE', 'RRF', String(rrfArgs.length), ...rrfArgs)
+  } else {
+    const linearArgs: string[] = []
+    if (input.linearAlpha !== undefined)
+      linearArgs.push('ALPHA', String(input.linearAlpha))
+    if (input.linearBeta !== undefined)
+      linearArgs.push('BETA', String(input.linearBeta))
+    args.push('COMBINE', 'LINEAR', String(linearArgs.length), ...linearArgs)
+  }
+  args.push('YIELD_SCORE_AS', HYBRID_SCORE_FIELD)
+
+  // FILTER
+  if (input.filter) args.push('FILTER', input.filter)
+
+  // LOAD
+  if (input.loadFields && input.loadFields.length > 0) {
+    args.push('LOAD', String(input.loadFields.length))
+    input.loadFields.forEach((field) => args.push(field))
+  } else {
+    args.push('LOAD', '*')
+  }
+
+  // SORTBY
+  args.push('SORTBY', HYBRID_SCORE_FIELD, 'ASC')
+
+  // LIMIT
+  args.push('LIMIT', '0', String(input.limit))
+
+  // PARAMS for vector blob
+  args.push('PARAMS', '2', input.queryParameter, input.vector)
+
+  return plan('FT.HYBRID', args)
+}
+
+const extractHybridFields = (
+  record: Record<string, unknown>,
+): Record<string, string> | undefined => {
+  const fields: Record<string, string> = {}
+  for (const [key, value] of Object.entries(record)) {
+    if (HYBRID_SCORE_FIELDS.includes(key.toLowerCase())) continue
+    const text = asText(value)
+    if (text !== undefined) fields[key] = text
+  }
+  return Object.keys(fields).length > 0 ? fields : undefined
+}
+
+const toHybridDocument = (
+  id: string | undefined,
+  record: Record<string, unknown>,
+): HybridScoreDocument | undefined => {
+  const textScore = asNumber(recordValue(record, HYBRID_TEXT_SCORE_FIELD))
+  const vectorScore = asNumber(recordValue(record, HYBRID_VECTOR_SCORE_FIELD))
+  const hybridScore = asNumber(recordValue(record, HYBRID_SCORE_FIELD))
+  if (
+    !id ||
+    textScore === undefined ||
+    vectorScore === undefined ||
+    hybridScore === undefined
+  )
+    return undefined
+  return {
+    id,
+    textScore,
+    vectorScore,
+    hybridScore,
+    fields: extractHybridFields(record),
+  }
+}
+
+export const parseHybridResponse = (reply: unknown): HybridQueryResult => {
+  const documents: HybridScoreDocument[] = []
+
+  // Try RESP3 format
+  const resp3 = toRecord(reply)
+  const results = recordValue(resp3, 'results')
+  if (Array.isArray(results)) {
+    for (const result of results) {
+      const row = toRecord(result)
+      const attributes = toRecord(
+        recordValue(row, 'extra_attributes') ?? recordValue(row, 'attributes'),
+      )
+      const document = toHybridDocument(
+        asText(recordValue(row, 'id')),
+        attributes,
+      )
+      if (document) documents.push(document)
+    }
+    const totalResults =
+      asNumber(recordValue(resp3, 'total_results')) ?? documents.length
+    return { documents, totalResults }
+  }
+
+  // RESP2 format: [count, id, [f, v, f, v, ...], id, [f, v, ...], ...]
+  const rows = Array.isArray(reply) ? reply : []
+  const totalResults = asNumber(rows[0]) ?? 0
+  for (let index = 1; index + 1 < rows.length; index += 2) {
+    const id = asText(rows[index])
+    const record = toRecord(rows[index + 1])
+    const document = toHybridDocument(id, record)
+    if (document) documents.push(document)
+  }
+  return { documents, totalResults }
 }
