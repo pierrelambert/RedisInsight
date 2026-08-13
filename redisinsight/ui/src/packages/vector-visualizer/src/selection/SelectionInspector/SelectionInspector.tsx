@@ -24,8 +24,13 @@ export const SelectionInspector = ({
         <S.Identifier title={row.id}>{row.id}</S.Identifier>
         <Text>{row.plotted ? 'Plotted' : 'Not plotted'}</Text>
         <Text>
-          {row.metric === 'similarity' ? 'Similarity score' : 'Distance'}:{' '}
-          {Number.isFinite(row.value) ? row.value.toFixed(2) : 'Unavailable'}
+          {row.metric === 'score' ? 'Score' : 'Similarity'}:{' '}
+          {Number.isFinite(row.value)
+            ? (row.metric === 'distance'
+                ? 1 - row.value
+                : row.value
+              ).toFixed(4)
+            : 'Unavailable'}
         </Text>
         <Text>Exactness: {exactness.replace('-', ' ')}</Text>
         <Text>Evidence: {provenance ?? 'Unavailable'}</Text>

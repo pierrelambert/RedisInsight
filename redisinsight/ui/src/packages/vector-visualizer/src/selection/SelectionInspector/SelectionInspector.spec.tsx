@@ -33,7 +33,7 @@ describe('SelectionInspector', () => {
     })
 
     expect(screen.getByTitle(id)).toBeInTheDocument()
-    expect(screen.getByText('Distance: 0.25')).toBeInTheDocument()
+    expect(screen.getByText('Similarity: 0.7500')).toBeInTheDocument()
     expect(screen.getByText('Exactness: approximate')).toBeInTheDocument()
     expect(screen.getByText('Evidence: Redis response')).toBeInTheDocument()
   })
@@ -60,8 +60,8 @@ describe('SelectionInspector', () => {
       provenance: 'Bounded sampled Redis response',
     })
 
-    expect(screen.getByText('Distance: Unavailable')).toBeInTheDocument()
-    expect(screen.queryByText('Distance: NaN')).not.toBeInTheDocument()
+    expect(screen.getByText('Similarity: Unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('Similarity: NaN')).not.toBeInTheDocument()
   })
 
   it('renders selected metadata and explicit record actions', () => {
