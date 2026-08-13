@@ -8,15 +8,24 @@ import {
   VectorDataSourceRef,
   VectorMetric,
 } from 'uiSrc/packages/vector-visualizer/src/contracts'
+import type {
+  AggregateResult,
+  HybridQueryResult,
+} from 'uiSrc/packages/vector-visualizer/src/contracts'
 import {
   parseSearchNeighbors,
   parseSearchProfile,
   planProfileSearchNeighbors,
+  planProfileRangeQuery,
   parseSearchInfo,
   parseAllowListedSearchMetadata,
   parseSearchSample,
   planSearchDiscovery,
   planSearchSample,
+  planHybridQuery,
+  parseHybridResponse,
+  planAggregateQuery,
+  parseAggregateResponse,
   SEARCH_CAPABILITIES,
 } from 'uiSrc/packages/vector-visualizer/src/searchAdapter'
 import {
@@ -61,6 +70,8 @@ export interface NativeSampleResult {
   dimensions: number
   metric: SamplingMetric
   algorithm?: string
+  compression?: string
+  graphMaxDegree?: number
   quantization?: string
   graphFacts?: VectorSetGraphFacts
   sourceCount: number
@@ -298,6 +309,8 @@ const sampleSearch = async (input: SearchSamplingInput) => {
     dimensions: field.dimensions,
     metric: field.metric,
     algorithm: field.algorithm,
+    compression: field.compression,
+    graphMaxDegree: field.graphMaxDegree,
     sourceCount: discovery.indexedCount,
     sampleCount: sample.length,
     method: 'ft-search',
@@ -512,6 +525,18 @@ export type NativeQueryResult =
             stages?: Array<{ name: string; count?: string; mode?: string }>
           }
     }
+  | {
+      kind: 'hybrid-ready'
+      documents: HybridQueryResult['documents']
+      totalResults: number
+      profile: { kind: 'none'; facts: Record<string, never> }
+    }
+  | {
+      kind: 'aggregate-ready'
+      groups: AggregateResult['groups']
+      totalGroups: number
+      profile: { kind: 'none'; facts: Record<string, never> }
+    }
   | { kind: 'cancelled' | 'stale' | 'unsupported' }
 
 export interface NativeQueryInput {
@@ -526,6 +551,34 @@ export interface NativeQueryInput {
   signal?: AbortSignal
   generation?: number
   accept?: (generation: number, value: null) => boolean | { accepted: boolean }
+  queryMode?: 'knn' | 'range' | 'hybrid' | 'aggregate'
+  radius?: number
+  epsilon?: number
+  efRuntime?: number
+  hybridPolicy?: 'AUTO' | 'BATCHES' | 'ADHOC_BF'
+  batchSize?: number
+  searchWindowSize?: number
+  shardKRatio?: number
+  useSearchHistory?: 'OFF' | 'ON' | 'AUTO'
+  searchBufferCapacity?: number
+  textQuery?: string
+  fusionMethod?: 'rrf' | 'linear'
+  rrfConstant?: number
+  rrfWindow?: number
+  linearAlpha?: number
+  linearBeta?: number
+  hybridVsimMode?: 'knn' | 'range'
+  filter?: string
+  aggregateGroupByFields?: string[]
+  aggregateReduceOps?: Array<{
+    function: string
+    field?: string
+    args?: string[]
+    alias: string
+  }>
+  aggregateSortBy?: { field: string; order: 'ASC' | 'DESC' }
+  aggregateLoadFields?: string[]
+  aggregateLimit?: number
 }
 
 const queryAccepted = (input: NativeQueryInput) => {
@@ -612,6 +665,137 @@ export const orchestrateNativeQuery = async (
         input.anchorVector.byteOffset,
         input.anchorVector.byteLength,
       )
+
+      if (input.queryMode === 'aggregate') {
+        if (
+          !input.aggregateGroupByFields?.length ||
+          !input.aggregateReduceOps?.length
+        )
+          return { kind: 'unsupported' }
+        const aggReply = await input.execute(
+          planAggregateQuery({
+            index: input.source.index,
+            baseQuery: `*=>[KNN ${input.limit} @${input.source.vectorField} $vv_anchor]`,
+            queryParameter: 'vv_anchor',
+            vector: vectorBytes,
+            loadFields: input.aggregateLoadFields,
+            groupByFields: input.aggregateGroupByFields,
+            reduceOps: input.aggregateReduceOps,
+            sortBy: input.aggregateSortBy,
+            limit: input.aggregateLimit,
+          }),
+          input.signal,
+        )
+        queryAccepted(input)
+        const aggResult = parseAggregateResponse(aggReply)
+        return {
+          kind: 'aggregate-ready',
+          groups: aggResult.groups,
+          totalGroups: aggResult.totalGroups,
+          profile: {
+            kind: 'none' as const,
+            facts: {} as Record<string, never>,
+          },
+        }
+      }
+
+      if (input.queryMode === 'hybrid') {
+        if (!input.textQuery) return { kind: 'unsupported' }
+        const reply = await input.execute(
+          planHybridQuery({
+            index: input.source.index,
+            textQuery: input.textQuery,
+            vectorField: input.source.vectorField,
+            queryParameter: 'vv_anchor',
+            vector: vectorBytes,
+            vsimMode: input.hybridVsimMode ?? 'knn',
+            limit: input.limit,
+            fusionMethod: input.fusionMethod ?? 'rrf',
+            rrfConstant: input.rrfConstant,
+            rrfWindow: input.rrfWindow,
+            linearAlpha: input.linearAlpha,
+            linearBeta: input.linearBeta,
+            radius: input.radius,
+            epsilon: input.epsilon,
+            efRuntime: input.efRuntime,
+            searchWindowSize: input.searchWindowSize,
+            shardKRatio: input.shardKRatio,
+            filter: input.filter,
+          }),
+          input.signal,
+        )
+        queryAccepted(input)
+        const parsed = parseHybridResponse(reply)
+        return {
+          kind: 'hybrid-ready',
+          documents: parsed.documents,
+          totalResults: parsed.totalResults,
+          profile: { kind: 'none', facts: {} },
+        }
+      }
+
+      if (input.queryMode === 'range') {
+        if (!input.radius || input.radius <= 0) return { kind: 'unsupported' }
+        const rangeReply = await input.execute(
+          planProfileRangeQuery({
+            index: input.source.index,
+            vectorField: input.source.vectorField,
+            queryParameter: 'vv_anchor',
+            vector: vectorBytes,
+            radius: input.radius,
+            epsilon: input.epsilon,
+            limit: input.limit,
+            runtimeParams: {
+              searchWindowSize: input.searchWindowSize,
+              shardKRatio: input.shardKRatio,
+              useSearchHistory: input.useSearchHistory,
+              searchBufferCapacity: input.searchBufferCapacity,
+            },
+          }),
+          input.signal,
+        )
+        queryAccepted(input)
+        const rangeProfileReply = Array.isArray(rangeReply)
+          ? rangeReply
+          : [rangeReply]
+        const rangeSearchResults = rangeProfileReply[0]
+        const rangeParsed = parseSearchNeighbors(rangeSearchResults, {
+          metric: input.metric,
+          algorithm: input.algorithm,
+        })
+        let rangeProfile: Extract<
+          NativeQueryResult,
+          { kind: 'ready' }
+        >['profile'] = {
+          kind: 'none',
+          facts: {},
+        }
+        try {
+          rangeProfile = normalizeProfile(parseSearchProfile(rangeProfileReply))
+        } catch {
+          // profile parsing is best-effort
+        }
+        return asQueryResult(
+          rangeParsed.map((neighbor) => ({
+            id: neighbor.id,
+            metric: neighbor.metric,
+            value: neighbor.value,
+            provenance: 'FT.SEARCH' as const,
+          })),
+          input.sampleIds,
+          rangeParsed.some(
+            (neighbor) => neighbor.provenance.exactness === 'approximate',
+          )
+            ? 'approximate'
+            : rangeParsed.some(
+                  (neighbor) => neighbor.provenance.exactness === 'exact',
+                )
+              ? 'exact'
+              : 'unknown',
+          rangeProfile,
+        )
+      }
+
       const reply = await input.execute(
         planProfileSearchNeighbors({
           index: input.source.index,
@@ -619,6 +803,15 @@ export const orchestrateNativeQuery = async (
           queryParameter: 'vv_anchor',
           vector: vectorBytes,
           limit: input.limit,
+          runtimeParams: {
+            efRuntime: input.efRuntime,
+            hybridPolicy: input.hybridPolicy,
+            batchSize: input.batchSize,
+            searchWindowSize: input.searchWindowSize,
+            shardKRatio: input.shardKRatio,
+            useSearchHistory: input.useSearchHistory,
+            searchBufferCapacity: input.searchBufferCapacity,
+          },
         }),
         input.signal,
       )

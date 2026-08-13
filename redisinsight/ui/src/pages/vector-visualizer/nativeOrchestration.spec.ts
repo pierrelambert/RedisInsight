@@ -535,7 +535,7 @@ describe('native Vector Visualizer query orchestration', () => {
           metric: 'cosine',
           algorithm,
           limit: 10,
-          execute: async () => [1, 'doc:anchor', ['__vv_metric', 0]],
+          execute: async () => [[1, 'doc:anchor', ['__vv_metric', 0]], []],
         }),
       ).resolves.toMatchObject({ kind: 'ready', exactness })
     },
@@ -543,13 +543,16 @@ describe('native Vector Visualizer query orchestration', () => {
 
   it('runs a bounded Search KNN only for the selected in-memory anchor and returns measured neighbors', async () => {
     const execute = jest.fn(async (plan: CommandPlan) => {
-      expect(plan.command).toBe('FT.SEARCH')
+      expect(plan.command).toBe('FT.PROFILE')
       return [
-        2,
-        'doc:anchor',
-        ['__vv_metric', 0],
-        'doc:neighbor',
-        ['__vv_metric', 0.125],
+        [
+          2,
+          'doc:anchor',
+          ['__vv_metric', 0],
+          'doc:neighbor',
+          ['__vv_metric', 0.125],
+        ],
+        [],
       ]
     })
 
@@ -588,8 +591,142 @@ describe('native Vector Visualizer query orchestration', () => {
           provenance: 'FT.SEARCH',
         },
       ],
-      profile: { kind: 'none', facts: {} },
+      profile: { kind: 'full', facts: {}, stages: [] },
     })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  const paramTokens = (plan: CommandPlan): unknown[] => {
+    const args = plan.arguments
+    const paramsIndex = args.indexOf('PARAMS')
+    const count = Number(args[paramsIndex + 1])
+    return args.slice(paramsIndex + 2, paramsIndex + 2 + count)
+  }
+
+  it('threads EF_RUNTIME into the KNN PARAMS section', async () => {
+    const execute = jest.fn(async (plan: CommandPlan) => {
+      expect(plan.command).toBe('FT.PROFILE')
+      expect(paramTokens(plan)).toEqual([
+        'vv_anchor',
+        expect.anything(),
+        'EF_RUNTIME',
+        '200',
+      ])
+      return [[1, 'doc:anchor', ['__vv_metric', 0]], []]
+    })
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor'],
+        metric: 'cosine',
+        algorithm: 'hnsw',
+        limit: 10,
+        efRuntime: 200,
+        execute,
+      }),
+    ).resolves.toMatchObject({ kind: 'ready' })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('dispatches range query mode to planProfileRangeQuery with radius and epsilon', async () => {
+    const execute = jest.fn(async (plan: CommandPlan) => {
+      expect(plan.command).toBe('FT.PROFILE')
+      expect(plan.arguments[1]).toBe('SEARCH')
+      const query = plan.arguments[4] as string
+      expect(query).toContain('VECTOR_RANGE 0.5 $vv_anchor')
+      expect(query).toContain('$EPSILON: 0.02')
+      return [[1, 'doc:anchor', ['__vv_metric', 0.1]], []]
+    })
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor'],
+        metric: 'cosine',
+        limit: 10,
+        queryMode: 'range',
+        radius: 0.5,
+        epsilon: 0.02,
+        execute,
+      }),
+    ).resolves.toMatchObject({ kind: 'ready' })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('includes BATCH_SIZE in PARAMS when HYBRID_POLICY is BATCHES', async () => {
+    const execute = jest.fn(async (plan: CommandPlan) => {
+      expect(paramTokens(plan)).toEqual([
+        'vv_anchor',
+        expect.anything(),
+        'HYBRID_POLICY',
+        'BATCHES',
+        'BATCH_SIZE',
+        '50',
+      ])
+      return [[1, 'doc:anchor', ['__vv_metric', 0]], []]
+    })
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor'],
+        metric: 'cosine',
+        limit: 10,
+        hybridPolicy: 'BATCHES',
+        batchSize: 50,
+        execute,
+      }),
+    ).resolves.toMatchObject({ kind: 'ready' })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('includes SEARCH_WINDOW_SIZE in PARAMS for an SVS-VAMANA algorithm', async () => {
+    const execute = jest.fn(async (plan: CommandPlan) => {
+      expect(paramTokens(plan)).toEqual([
+        'vv_anchor',
+        expect.anything(),
+        'SEARCH_WINDOW_SIZE',
+        '64',
+      ])
+      return [[1, 'doc:anchor', ['__vv_metric', 0]], []]
+    })
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor'],
+        metric: 'cosine',
+        algorithm: 'svs-vamana',
+        limit: 10,
+        searchWindowSize: 64,
+        execute,
+      }),
+    ).resolves.toMatchObject({ kind: 'ready' })
     expect(execute).toHaveBeenCalledTimes(1)
   })
 })
