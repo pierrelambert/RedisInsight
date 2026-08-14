@@ -900,6 +900,108 @@ describe('VectorVisualizerPage', () => {
     )
   })
 
+  it('renders Aggregate and Hybrid results without an empty neighbor evidence shell', async () => {
+    const rows = [
+      ['doc:1', float32(1, 2), { brand: 'Nord' }],
+      ['doc:2', float32(2, 3), { brand: 'Redis' }],
+    ] as Array<[string, string, Record<string, string>]>
+    const commands: string[] = []
+    jest.spyOn(apiService, 'post').mockImplementation((_, body) => {
+      const command = (body as { command: string }).command
+      commands.push(command)
+      let response: unknown
+      if (command.startsWith('FT.INFO')) {
+        response = searchInfo(2, 'COSINE', [['brand', 'TAG']])
+      } else if (command.startsWith('FT.SEARCH')) {
+        response = searchRowsWithFields(...rows)
+      } else if (command.includes(serializeNativeArgument('AGGREGATE'))) {
+        response = [
+          [1, ['brand', 'Nord', 'count', 2]],
+          ['Total profile time', '1.4'],
+        ]
+      } else if (command.includes(serializeNativeArgument('HYBRID'))) {
+        response = [
+          [
+            1,
+            'doc:1',
+            [
+              'text_score',
+              '0.9',
+              'vector_score',
+              '0.8',
+              'hybrid_score',
+              '0.95',
+            ],
+          ],
+          ['Total profile time', '1.1'],
+        ]
+      } else {
+        response = []
+      }
+      return Promise.resolve({
+        data: { status: 'success', response },
+      }) as never
+    })
+    setVectorVisualizerSource({
+      kind: 'search-index',
+      index: 'idx-query-modes',
+      vectorField: 'embedding',
+    })
+
+    render(<VectorVisualizerPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: /^(Index|Vector set) atlas$/ }),
+      ).toBeVisible(),
+    )
+    fireEvent.click(
+      within(
+        screen.getByTestId('vector-visualizer-results-inspector'),
+      ).getByTestId('vector-visualizer-selected-row-doc:1'),
+    )
+    openAdditionalWorkflow('Query Lab')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aggregate' }))
+    fireEvent.change(screen.getByPlaceholderText('category'), {
+      target: { value: 'brand' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run selected anchor query' }),
+    )
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Aggregate result groups')).toBeVisible(),
+    )
+    expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
+      'brand: Nord',
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Neighbors' }),
+    ).not.toBeInTheDocument()
+    expect(commands.some((command) => command.startsWith('FT.PROFILE'))).toBe(
+      true,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hybrid' }))
+    fireEvent.change(screen.getByPlaceholderText('*'), {
+      target: { value: 'Nord' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run selected anchor query' }),
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('hybrid-score-chart')).toBeInTheDocument(),
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Neighbors' }),
+    ).not.toBeInTheDocument()
+    expect(commands.some((command) => command.startsWith('FT.PROFILE'))).toBe(
+      true,
+    )
+  })
+
   it('keeps native Neighbors focused and passes bounded response evidence to the optional Query Lab', async () => {
     const rows = Array.from(
       { length: 12 },

@@ -633,7 +633,7 @@ const baseHybridInput: HybridQueryInput = {
 }
 
 describe('planHybridQuery', () => {
-  it('builds the SEARCH clause, VSIM KNN clause, COMBINE RRF clause, LOAD *, and PARAMS', () => {
+  it('builds the SEARCH clause, VSIM KNN clause, COMBINE RRF clause, score LOAD, and PARAMS', () => {
     const result = planHybridQuery(baseHybridInput)
 
     expect(result.command).toBe('FT.HYBRID')
@@ -647,7 +647,10 @@ describe('planHybridQuery', () => {
         '$vv_anchor',
         'KNN',
         'LOAD',
-        '*',
+        '3',
+        'text_score',
+        'vector_score',
+        'hybrid_score',
         'PARAMS',
         '2',
         'vv_anchor',
@@ -666,6 +669,23 @@ describe('planHybridQuery', () => {
     expect(result.arguments[yieldIndices[0] + 1]).toBe('text_score')
     expect(result.arguments[yieldIndices[1] + 1]).toBe('vector_score')
     expect(result.arguments[yieldIndices[2] + 1]).toBe('hybrid_score')
+  })
+
+  it('preserves requested load fields after the required score aliases', () => {
+    const result = planHybridQuery({
+      ...baseHybridInput,
+      loadFields: ['brand', 'text_score'],
+    })
+
+    const loadIndex = result.arguments.indexOf('LOAD')
+    expect(result.arguments.slice(loadIndex, loadIndex + 6)).toEqual([
+      'LOAD',
+      '4',
+      'text_score',
+      'vector_score',
+      'hybrid_score',
+      'brand',
+    ])
   })
 
   it('builds COMBINE RRF with CONSTANT and WINDOW using the nargs convention', () => {

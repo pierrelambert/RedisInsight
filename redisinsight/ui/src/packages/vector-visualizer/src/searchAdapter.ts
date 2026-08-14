@@ -972,13 +972,14 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
   // FILTER
   if (input.filter) args.push('FILTER', input.filter)
 
-  // LOAD
-  if (input.loadFields && input.loadFields.length > 0) {
-    args.push('LOAD', String(input.loadFields.length))
-    input.loadFields.forEach((field) => args.push(field))
-  } else {
-    args.push('LOAD', '*')
-  }
+  // LOAD the score aliases explicitly; they are required by the evidence chart.
+  const loadFields = [
+    ...HYBRID_SCORE_FIELDS,
+    ...(input.loadFields ?? []).filter(
+      (field) => !HYBRID_SCORE_FIELDS.includes(field.toLowerCase()),
+    ),
+  ]
+  args.push('LOAD', String(loadFields.length), ...loadFields)
 
   // SORTBY
   args.push('SORTBY', '2', HYBRID_SCORE_FIELD, 'ASC')

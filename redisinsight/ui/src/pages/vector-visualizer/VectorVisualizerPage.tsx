@@ -1650,6 +1650,7 @@ export const VectorVisualizerPage = () => {
         })
         setQuery({
           ...emptyQuery,
+          profile: result.profile,
           status: result.documents.length ? 'ready' : 'empty',
         })
         setAggregateResult(undefined)
@@ -1662,6 +1663,7 @@ export const VectorVisualizerPage = () => {
         })
         setQuery({
           ...emptyQuery,
+          profile: result.profile,
           status: result.groups.length ? 'ready' : 'empty',
         })
         setHybridResult(undefined)
@@ -2484,34 +2486,58 @@ export const VectorVisualizerPage = () => {
             })}
           </Text>
         ) : undefined}
-        <QueryLab
-          {...query}
-          sourceSample={
-            sample
-              ? buildNativeQuerySourceSample({
-                  sourceKind,
-                  sampleKind:
-                    sample.result.kind === 'partial' ? 'partial' : 'success',
-                  neighborMetric: query.neighbors[0]?.metric,
-                  health: healthEvidence,
-                })
-              : undefined
-          }
-          topKBoundary={
-            query.status === 'ready' || query.status === 'empty'
-              ? neighborLimit
-              : undefined
-          }
-          freshness={
-            sample?.result.freshness === 'changed-while-sampled'
-              ? 'changed while sampled'
-              : 'current'
-          }
-          sourceKind={sourceKind}
-          selectedIds={selectedIds}
-          focusedId={selectedIds[0]}
-          onSelectionChange={setSelectedIds}
-        />
+        {queryMode === 'knn' || queryMode === 'range' ? (
+          <QueryLab
+            {...query}
+            sourceSample={
+              sample
+                ? buildNativeQuerySourceSample({
+                    sourceKind,
+                    sampleKind:
+                      sample.result.kind === 'partial' ? 'partial' : 'success',
+                    neighborMetric: query.neighbors[0]?.metric,
+                    health: healthEvidence,
+                  })
+                : undefined
+            }
+            topKBoundary={
+              query.status === 'ready' || query.status === 'empty'
+                ? neighborLimit
+                : undefined
+            }
+            freshness={
+              sample?.result.freshness === 'changed-while-sampled'
+                ? 'changed while sampled'
+                : 'current'
+            }
+            sourceKind={sourceKind}
+            selectedIds={selectedIds}
+            focusedId={selectedIds[0]}
+            onSelectionChange={setSelectedIds}
+          />
+        ) : (
+          <Text aria-live="polite" role="status">
+            {query.status === 'ready'
+              ? queryMode === 'aggregate'
+                ? 'Aggregate result groups are ready.'
+                : 'Hybrid result scores are ready.'
+              : query.status === 'empty'
+                ? queryMode === 'aggregate'
+                  ? 'No aggregate groups returned for this query.'
+                  : 'No hybrid documents returned for this query.'
+                : query.status === 'fetching'
+                  ? 'Fetching bounded query evidence.'
+                  : query.status === 'unsupported'
+                    ? 'This source cannot provide this query evidence.'
+                    : query.status === 'acl-unavailable'
+                      ? 'Redis ACLs do not allow this evidence.'
+                      : query.status === 'cancelled'
+                        ? 'Query retrieval was cancelled.'
+                        : query.status === 'recoverable-error'
+                          ? 'Query evidence could not be loaded. Retry.'
+                          : 'Select a sampled document and run the query.'}
+          </Text>
+        )}
         {queryMode === 'aggregate' &&
           aggregateResult &&
           aggregateResult.groups.length > 0 && (
