@@ -182,3 +182,11 @@ Stated boundaries (not defects):
 - VV.UI.011 live route proof exists from E5.R3/R8 but was unavailable to the E5.R10 verifier
 
 Historical P2 disposition is tracked in the capability ledger.
+
+## E5.R11 selective recovery from `6fe901323` — 2026-08-14
+
+- Root cause: the recovery commit `cdcc01ec3` preserved the safe topology/tune/compare module additions but missed several constructive page, renderer, density, legend, PCA, and control hunks from `6fe901323`.
+- Restored scope: visible Vector Visualizer menu icon fill, PCA/UMAP projection control and compare wiring, copy-query action, k-sensitivity Tune entry point, initial Atlas transform reset on new sampled data, density circular/edge fade, amber selected highlight, AtlasLegend truncation/expand control, side-by-side duplicate/outlier layout, and FT.PROFILE response-shape tolerance.
+- Explicitly preserved: `ActionsCell`, `searchAdapter.ts`, `searchAdapter.spec.ts`, `HybridScoreChart/*`, Aggregate/Hybrid/Profile/Range query pipeline, and the fixed top-level `clusterDominant` behavior.
+- Fresh local proof: Vector Visualizer package Jest 36 suites / 347 tests, native page Jest 14 suites / 93 tests, scoped ESLint, touched-path UI TypeScript diagnostic filter, and `git diff --check` pass.
+- Boundaries: no live `localhost:8080` browser rerun, no Electron package, no screenshot baseline, no commit/stage/push/PR. Aggregate repository gates remain outside this recovery pass.
