@@ -22,9 +22,9 @@ import {
   parseSearchSample,
   planSearchDiscovery,
   planSearchSample,
-  planHybridQuery,
+  planProfileHybridQuery,
   parseHybridResponse,
-  planAggregateQuery,
+  planProfileAggregateQuery,
   parseAggregateResponse,
   SEARCH_CAPABILITIES,
 } from 'uiSrc/packages/vector-visualizer/src/searchAdapter'
@@ -515,6 +515,14 @@ export const orchestrateNativeSample = async (
   }
 }
 
+type NativeQueryProfile =
+  | { kind: 'none'; facts: Record<string, never> }
+  | {
+      kind: 'full'
+      facts: Record<string, string | undefined>
+      stages?: Array<{ name: string; count?: string; mode?: string }>
+    }
+
 export type NativeQueryResult =
   | {
       kind: 'ready'
@@ -527,25 +535,19 @@ export type NativeQueryResult =
         plotted: boolean
         provenance: 'FT.SEARCH' | 'VSIM'
       }>
-      profile:
-        | { kind: 'none'; facts: Record<string, never> }
-        | {
-            kind: 'full'
-            facts: Record<string, string | undefined>
-            stages?: Array<{ name: string; count?: string; mode?: string }>
-          }
+      profile: NativeQueryProfile
     }
   | {
       kind: 'hybrid-ready'
       documents: HybridQueryResult['documents']
       totalResults: number
-      profile: { kind: 'none'; facts: Record<string, never> }
+      profile: NativeQueryProfile
     }
   | {
       kind: 'aggregate-ready'
       groups: AggregateResult['groups']
       totalGroups: number
-      profile: { kind: 'none'; facts: Record<string, never> }
+      profile: NativeQueryProfile
     }
   | { kind: 'cancelled' | 'stale' | 'unsupported' }
 
@@ -697,7 +699,7 @@ export const orchestrateNativeQuery = async (
         )
           return { kind: 'unsupported' }
         const aggReply = await input.execute(
-          planAggregateQuery({
+          planProfileAggregateQuery({
             index: input.source.index,
             baseQuery: `*=>[KNN ${input.limit} @${input.source.vectorField} $vv_anchor AS __vv_metric]`,
             queryParameter: 'vv_anchor',
@@ -711,22 +713,33 @@ export const orchestrateNativeQuery = async (
           input.signal,
         )
         queryAccepted(input)
-        const aggResult = parseAggregateResponse(aggReply)
+        const aggProfileReply = Array.isArray(aggReply) ? aggReply : [aggReply]
+        const aggResult = parseAggregateResponse(
+          searchResultsFromProfileReply(aggReply),
+        )
+        let aggregateProfile: NativeQueryProfile = {
+          kind: 'none',
+          facts: {},
+        }
+        try {
+          aggregateProfile = normalizeProfile(
+            parseSearchProfile(aggProfileReply),
+          )
+        } catch {
+          // profile parsing is best-effort
+        }
         return {
           kind: 'aggregate-ready',
           groups: aggResult.groups,
           totalGroups: aggResult.totalGroups,
-          profile: {
-            kind: 'none' as const,
-            facts: {} as Record<string, never>,
-          },
+          profile: aggregateProfile,
         }
       }
 
       if (input.queryMode === 'hybrid') {
         if (!input.textQuery) return { kind: 'unsupported' }
         const reply = await input.execute(
-          planHybridQuery({
+          planProfileHybridQuery({
             index: input.source.index,
             textQuery: input.textQuery,
             vectorField: input.source.vectorField,
@@ -749,12 +762,24 @@ export const orchestrateNativeQuery = async (
           input.signal,
         )
         queryAccepted(input)
-        const parsed = parseHybridResponse(reply)
+        const hybridProfileReply = Array.isArray(reply) ? reply : [reply]
+        const parsed = parseHybridResponse(searchResultsFromProfileReply(reply))
+        let hybridProfile: NativeQueryProfile = {
+          kind: 'none',
+          facts: {},
+        }
+        try {
+          hybridProfile = normalizeProfile(
+            parseSearchProfile(hybridProfileReply),
+          )
+        } catch {
+          // profile parsing is best-effort
+        }
         return {
           kind: 'hybrid-ready',
           documents: parsed.documents,
           totalResults: parsed.totalResults,
-          profile: { kind: 'none', facts: {} },
+          profile: hybridProfile,
         }
       }
 

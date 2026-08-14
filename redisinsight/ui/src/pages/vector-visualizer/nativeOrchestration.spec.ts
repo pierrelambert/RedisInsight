@@ -845,10 +845,14 @@ describe('native Vector Visualizer query orchestration', () => {
 
   it('dispatches aggregate query mode with a named vector metric and loaded group field', async () => {
     const execute = jest.fn(async (plan: CommandPlan) => {
-      expect(plan.command).toBe('FT.AGGREGATE')
-      expect(plan.arguments[1]).toBe(
+      expect(plan.command).toBe('FT.PROFILE')
+      expect(plan.arguments.slice(0, 5)).toEqual([
+        'idx-products',
+        'AGGREGATE',
+        'LIMITED',
+        'QUERY',
         '*=>[KNN 10 @embedding $vv_anchor AS __vv_metric]',
-      )
+      ])
       expect(plan.arguments).toEqual(
         expect.arrayContaining([
           'LOAD',
@@ -865,7 +869,10 @@ describe('native Vector Visualizer query orchestration', () => {
           'avg_value',
         ]),
       )
-      return [1, ['brand', 'Nord', 'avg_value', '0.125']]
+      return [
+        [1, ['brand', 'Nord', 'avg_value', '0.125']],
+        ['Total profile time', '1', 'Iterators profile', ['Type', 'WILDCARD']],
+      ]
     })
 
     await expect(
@@ -891,13 +898,21 @@ describe('native Vector Visualizer query orchestration', () => {
     ).resolves.toMatchObject({
       kind: 'aggregate-ready',
       groups: [{ brand: 'Nord', avg_value: 0.125 }],
+      profile: { kind: 'full' },
     })
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('dispatches hybrid query mode with nested yield-score clauses', async () => {
     const execute = jest.fn(async (plan: CommandPlan) => {
-      expect(plan.command).toBe('FT.HYBRID')
+      expect(plan.command).toBe('FT.PROFILE')
+      expect(plan.arguments.slice(0, 5)).toEqual([
+        'idx-products',
+        'HYBRID',
+        'LIMITED',
+        'QUERY',
+        'SEARCH',
+      ])
       const knnIndex = plan.arguments.indexOf('KNN')
       const knnCount = Number(plan.arguments[knnIndex + 1])
       expect(
@@ -916,9 +931,12 @@ describe('native Vector Visualizer query orchestration', () => {
         'ASC',
       ])
       return [
-        1,
-        'doc:anchor',
-        ['text_score', '0.5', 'vector_score', '0.1', 'hybrid_score', '0.6'],
+        [
+          1,
+          'doc:anchor',
+          ['text_score', '0.5', 'vector_score', '0.1', 'hybrid_score', '0.6'],
+        ],
+        ['Total profile time', '1', 'Iterators profile', ['Type', 'HYBRID']],
       ]
     })
 
@@ -941,6 +959,7 @@ describe('native Vector Visualizer query orchestration', () => {
     ).resolves.toMatchObject({
       kind: 'hybrid-ready',
       documents: [{ id: 'doc:anchor', hybridScore: 0.6 }],
+      profile: { kind: 'full' },
     })
     expect(execute).toHaveBeenCalledTimes(1)
   })

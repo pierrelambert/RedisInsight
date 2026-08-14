@@ -843,6 +843,22 @@ export const planAggregateQuery = (input: AggregateQueryInput): CommandPlan => {
   return plan('FT.AGGREGATE', args)
 }
 
+export const planProfileAggregateQuery = (
+  input: AggregateQueryInput,
+): CommandPlan => {
+  const aggregatePlan = planAggregateQuery(input)
+  const [, query, ...aggregateArgs] = aggregatePlan.arguments
+
+  return plan('FT.PROFILE', [
+    input.index,
+    'AGGREGATE',
+    'LIMITED',
+    'QUERY',
+    query,
+    ...aggregateArgs,
+  ])
+}
+
 const coerceGroupValue = (
   group: AggregateResultGroup,
   key: string,
@@ -974,6 +990,21 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
   args.push('PARAMS', '2', input.queryParameter, input.vector)
 
   return plan('FT.HYBRID', args)
+}
+
+export const planProfileHybridQuery = (
+  input: HybridQueryInput,
+): CommandPlan => {
+  const hybridPlan = planHybridQuery(input)
+  const [, ...hybridArgs] = hybridPlan.arguments
+
+  return plan('FT.PROFILE', [
+    input.index,
+    'HYBRID',
+    'LIMITED',
+    'QUERY',
+    ...hybridArgs,
+  ])
 }
 
 const extractHybridFields = (

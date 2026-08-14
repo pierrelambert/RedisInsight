@@ -6,6 +6,8 @@ import {
   parseSearchSample,
   planAggregateQuery,
   planHybridQuery,
+  planProfileAggregateQuery,
+  planProfileHybridQuery,
   planProfileRangeQuery,
   planProfileSearchNeighbors,
   planRangeQuery,
@@ -538,6 +540,24 @@ describe('planAggregateQuery', () => {
   })
 })
 
+describe('planProfileAggregateQuery', () => {
+  it('wraps FT.AGGREGATE in FT.PROFILE AGGREGATE LIMITED QUERY', () => {
+    const result = planProfileAggregateQuery(baseAggregateInput)
+
+    expect(result.command).toBe('FT.PROFILE')
+    expect(result.arguments.slice(0, 5)).toEqual([
+      'test-idx',
+      'AGGREGATE',
+      'LIMITED',
+      'QUERY',
+      '*=>[KNN 100 @embedding $vv_anchor AS __vv_metric]',
+    ])
+    expect(result.arguments).toEqual(
+      expect.arrayContaining(['GROUPBY', '1', '@category', 'PARAMS', '2']),
+    )
+  })
+})
+
 describe('parseAggregateResponse', () => {
   it('parses RESP2 flat format groups', () => {
     const reply = [
@@ -821,6 +841,25 @@ describe('planHybridQuery', () => {
     )
     expect(knnArgs).toContain('SHARD_K_RATIO')
     expect(knnArgs[knnArgs.indexOf('SHARD_K_RATIO') + 1]).toBe('0.5')
+  })
+})
+
+describe('planProfileHybridQuery', () => {
+  it('wraps FT.HYBRID in FT.PROFILE HYBRID LIMITED QUERY', () => {
+    const result = planProfileHybridQuery(baseHybridInput)
+
+    expect(result.command).toBe('FT.PROFILE')
+    expect(result.arguments.slice(0, 6)).toEqual([
+      'test-idx',
+      'HYBRID',
+      'LIMITED',
+      'QUERY',
+      'SEARCH',
+      'wireless headphones',
+    ])
+    expect(result.arguments).toEqual(
+      expect.arrayContaining(['VSIM', '@embedding', '$vv_anchor', 'COMBINE']),
+    )
   })
 })
 
