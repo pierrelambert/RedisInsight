@@ -1,4 +1,11 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { Text, Title } from 'uiSrc/components/base/text'
 import { PluginsThemeContext } from 'uiSrc/components/base/utils/pluginsThemeContext'
@@ -57,24 +64,32 @@ export const Atlas = ({
   const palette = useMemo<AtlasRendererPalette>(
     () => ({
       default: theme.semantic.color.text.primary600,
-      selected: theme.semantic.color.text.informative400,
+      selected: theme.semantic.color.text.attention500,
       liveNeighbor: theme.semantic.color.text.success500,
       outlier: theme.semantic.color.text.attention500,
       duplicate: theme.semantic.color.text.discovery400,
       hovered: theme.semantic.color.text.primary400,
-      pointSize: Number.parseFloat(theme.core.space.space100) * 10,
+      pointSize: Number.parseFloat(theme.core.space.space100) * 14,
     }),
     [theme],
   )
+
+  const controlledSelectedIdsRef = useRef(controlledSelectedIds)
+  controlledSelectedIdsRef.current = controlledSelectedIds
+  const onSelectionChangeRef = useRef(onSelectionChange)
+  onSelectionChangeRef.current = onSelectionChange
+
+  const handleSelect = useCallback((ids: string[]) => {
+    if (controlledSelectedIdsRef.current === undefined)
+      setUncontrolledSelectedIds(ids)
+    onSelectionChangeRef.current(ids)
+  }, [])
 
   useEffect(() => {
     if (!canvas.current) return undefined
     const nextRenderer = new AtlasRenderer(canvas.current, {
       interactionMode,
-      onSelect: (ids) => {
-        if (controlledSelectedIds === undefined) setUncontrolledSelectedIds(ids)
-        onSelectionChange(ids)
-      },
+      onSelect: handleSelect,
       onHover: setHoveredId,
       onSelectionBoxChange: setSelectionBox,
       onTransformChange: setTransform,
@@ -91,7 +106,7 @@ export const Atlas = ({
       observer.disconnect()
       nextRenderer.destroy()
     }
-  }, [controlledSelectedIds, interactionMode, onSelectionChange])
+  }, [interactionMode, handleSelect])
 
   useEffect(() => {
     if (interactionMode !== 'region' || !selectedIds.length)
@@ -130,11 +145,11 @@ export const Atlas = ({
         <Title component="h2" size="M">
           {title}
         </Title>
-        <Text color="subdued" size="S">
-          {interactionMode === 'region'
-            ? `${selectedIds.length} points selected from the displayed sample`
-            : `2D UMAP projection · ${sampleIds.length} response-backed sampled records`}
-        </Text>
+        {interactionMode === 'region' && (
+          <Text color="subdued" size="S">
+            {selectedIds.length} points selected from the displayed sample
+          </Text>
+        )}
       </S.Header>
       <S.CanvasRow>
         <S.CanvasFrame>
@@ -151,12 +166,6 @@ export const Atlas = ({
             ref={canvas}
             tabIndex={0}
           />
-          <S.HorizontalAxis aria-hidden="true">
-            UMAP 1 · derived coordinate
-          </S.HorizontalAxis>
-          <S.VerticalAxis aria-hidden="true">
-            UMAP 2 · derived coordinate
-          </S.VerticalAxis>
           {showMapLabels &&
             clusterLabels.map((clusterLabel) => (
               <S.ClusterLabel

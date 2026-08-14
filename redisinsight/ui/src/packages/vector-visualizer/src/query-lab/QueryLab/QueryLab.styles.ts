@@ -6,12 +6,12 @@ import { Col, Row } from 'uiSrc/components/base/layout/flex'
 
 export const Shell = styled(Col)`
   flex: 1 1 auto;
-  block-size: 100%;
+  block-size: auto;
   min-block-size: 0;
   min-inline-size: 0;
   box-sizing: border-box;
-  overflow: hidden;
-  padding: ${({ theme }) => theme.core.space.space200};
+  overflow: visible;
+  padding: ${({ theme }) => theme.core.space.space100};
   background-color: ${({ theme }) =>
     theme.semantic.color.background.neutral100};
 
@@ -30,17 +30,17 @@ export const Header = styled(Row)`
   flex: 0 0 auto;
   border-block-end: ${({ theme }) => theme.core.space.space010} solid
     ${({ theme }) => theme.semantic.color.border.neutral500};
-  padding-block-end: ${({ theme }) => theme.core.space.space100};
+  padding-block-end: ${({ theme }) => theme.core.space.space050};
 `
 
 export const Workspace = styled(Col)`
   flex: 1 1 0;
-  min-block-size: 0;
+  min-block-size: ${({ theme }) => `calc(${theme.core.space.space800} * 4)`};
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
   grid-template-rows: minmax(0, 1fr);
   align-items: start;
-  gap: ${({ theme }) => theme.core.space.space200};
+  gap: ${({ theme }) => theme.core.space.space100};
   min-inline-size: 0;
   overflow: hidden;
 `
@@ -53,7 +53,7 @@ export const EvidencePanel = styled(Col).attrs({ gap: 'm' })`
   min-inline-size: 0;
   box-sizing: border-box;
   overflow: hidden;
-  padding: ${({ theme }) => theme.core.space.space200};
+  padding: ${({ theme }) => theme.core.space.space100};
   border: ${({ theme }) => theme.core.space.space010} solid
     ${({ theme }) => theme.semantic.color.border.neutral500};
   border-radius: ${({ theme }) => theme.components.card.borderRadius};
@@ -69,7 +69,7 @@ export const InspectorPanel = styled(Col).attrs({ gap: 'm' })`
   min-inline-size: 0;
   box-sizing: border-box;
   overflow-y: auto;
-  padding: ${({ theme }) => theme.core.space.space200};
+  padding: ${({ theme }) => theme.core.space.space100};
   border: ${({ theme }) => theme.core.space.space010} solid
     ${({ theme }) => theme.semantic.color.border.neutral500};
   border-radius: ${({ theme }) => theme.components.card.borderRadius};
@@ -89,6 +89,21 @@ export const EvidenceScrollport = styled.div`
 
 export const Section = styled(Col).attrs({ gap: 's' })`
   min-inline-size: 0;
+`
+
+export const NeighborEvidenceLayout = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: ${({ theme }) => theme.core.space.space100};
+  min-block-size: ${({ theme }) => `calc(${theme.core.space.space800} * 3)`};
+  min-inline-size: 0;
+`
+
+export const NeighborEvidenceSummary = styled(Col).attrs({ gap: 'xs' })`
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
 `
 
 export const StatePanel = styled(Col).attrs({ gap: 's' })`
@@ -124,7 +139,7 @@ export const NeighborButton = styled(Button)<{
 
 export const RadialPlot = styled.div`
   position: relative;
-  min-block-size: ${({ theme }) => `calc(${theme.core.space.space800} * 4)`};
+  min-block-size: ${({ theme }) => `calc(${theme.core.space.space800} * 3)`};
   overflow: hidden;
   border: ${({ theme }) => theme.core.space.space010} solid
     ${({ theme }) => theme.semantic.color.border.neutral500};

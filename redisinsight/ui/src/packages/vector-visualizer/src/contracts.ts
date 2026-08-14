@@ -227,9 +227,21 @@ export interface NormalizedNeighbor {
 
 const textDecoder = new TextDecoder()
 
+const asRedisTaggedScalar = (value: unknown): string | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
+  const record = value as Record<string, unknown>
+  if (String(record.type).toLowerCase() !== 'integer') return undefined
+  return typeof record.value === 'string' || typeof record.value === 'number'
+    ? String(record.value)
+    : undefined
+}
+
 export const asText = (value: unknown): string | undefined => {
   if (typeof value === 'string') return value
   if (typeof value === 'number') return String(value)
+  const taggedScalar = asRedisTaggedScalar(value)
+  if (taggedScalar !== undefined) return taggedScalar
   if (
     ArrayBuffer.isView(value) &&
     'BYTES_PER_ELEMENT' in value &&

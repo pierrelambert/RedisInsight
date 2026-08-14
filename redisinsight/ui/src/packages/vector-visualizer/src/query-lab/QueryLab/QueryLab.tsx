@@ -145,6 +145,8 @@ export const QueryLab = ({
 
   const metricLabel = metricValueLabel(neighbors[0]?.metric ?? 'similarity')
   const isEvidenceReady = READY_EVIDENCE_STATUSES.has(status)
+  const statusMessage =
+    isEvidenceReady && focusedId ? `Selected ${focusedId}` : stateCopy[status]
   const responseProvenance = Array.from(
     new Set(
       neighbors.flatMap(({ provenance }) => (provenance ? [provenance] : [])),
@@ -189,7 +191,7 @@ export const QueryLab = ({
         </RiBadge>
       </S.Header>
       <Text aria-live="polite" role="status">
-        {focusedId ? `Selected ${focusedId}` : stateCopy[status]}
+        {statusMessage}
       </Text>
       {isEvidenceReady ? (
         <S.Workspace
@@ -214,93 +216,100 @@ export const QueryLab = ({
               tabIndex={0}
             >
               <S.Section as="section" aria-labelledby="neighbors-heading">
-                <Title component="h4" id="neighbors-heading" size="XS">
-                  Neighbors
-                </Title>
-                <Text size="S">{metricLabel}</Text>
-                <Text color="subdued" size="XS">
-                  Distance from the query anchor is metric-monotonic.
-                </Text>
-                <Text color="subdued" size="XS">
-                  Angle: layout only
-                </Text>
-                <Text color="subdued" size="XS">
-                  {exactnessLabel[exactness]}
-                </Text>
-                <Text color="subdued" size="XS">
-                  Freshness: {freshness}
-                </Text>
-                <S.RadialPlot aria-label="Query-centered radial neighbor layout">
-                  {threshold && thresholdRingRadius !== undefined && (
-                    <S.EvidenceRing
-                      aria-label={`${threshold.label} ring`}
-                      data-ring-radius={thresholdRingRadius.toFixed(4)}
-                      $radius={thresholdRingRadius}
-                    />
-                  )}
-                  {topKBoundary !== undefined &&
-                    topKRingRadius !== undefined && (
+                <S.NeighborEvidenceLayout data-testid="query-lab-neighbor-evidence-layout">
+                  <S.NeighborEvidenceSummary>
+                    <Title component="h4" id="neighbors-heading" size="XS">
+                      Neighbors
+                    </Title>
+                    <Text size="S">{metricLabel}</Text>
+                    <Text color="subdued" size="XS">
+                      Distance from the query anchor is metric-monotonic.
+                    </Text>
+                    <Text color="subdued" size="XS">
+                      Angle: layout only
+                    </Text>
+                    <Text color="subdued" size="XS">
+                      {exactnessLabel[exactness]}
+                    </Text>
+                    <Text color="subdued" size="XS">
+                      Freshness: {freshness}
+                    </Text>
+                    <Col gap="xs">
+                      {threshold ? (
+                        <Text size="XS">
+                          {threshold.label}{' '}
+                          {thresholdOperator(threshold.operator)}{' '}
+                          {threshold.value.toFixed(2)} · {threshold.provenance}
+                        </Text>
+                      ) : (
+                        <Text color="subdued" size="XS">
+                          Metric threshold ring unavailable: no response-backed
+                          threshold.
+                        </Text>
+                      )}
+                      {topKBoundary !== undefined ? (
+                        <Text size="XS">
+                          Top-{topKBoundary} result boundary
+                        </Text>
+                      ) : (
+                        <Text color="subdued" size="XS">
+                          Top-k boundary ring unavailable: query k was not
+                          supplied.
+                        </Text>
+                      )}
+                    </Col>
+                  </S.NeighborEvidenceSummary>
+                  <S.RadialPlot aria-label="Query-centered radial neighbor layout">
+                    {threshold && thresholdRingRadius !== undefined && (
                       <S.EvidenceRing
-                        aria-label={`Top-${topKBoundary} result boundary ring`}
-                        data-ring-radius={topKRingRadius.toFixed(4)}
-                        $radius={topKRingRadius}
+                        aria-label={`${threshold.label} ring`}
+                        data-ring-radius={thresholdRingRadius.toFixed(4)}
+                        $radius={thresholdRingRadius}
                       />
                     )}
-                  <S.QueryAnchor aria-label="Query anchor">Query</S.QueryAnchor>
-                  {neighbors.map((neighbor) => {
-                    const position = radialPosition(
-                      neighbor.metric,
-                      neighbor.rank,
-                      neighbor.value,
-                    )
+                    {topKBoundary !== undefined &&
+                      topKRingRadius !== undefined && (
+                        <S.EvidenceRing
+                          aria-label={`Top-${topKBoundary} result boundary ring`}
+                          data-ring-radius={topKRingRadius.toFixed(4)}
+                          $radius={topKRingRadius}
+                        />
+                      )}
+                    <S.QueryAnchor aria-label="Query anchor">
+                      Query
+                    </S.QueryAnchor>
+                    {neighbors.map((neighbor) => {
+                      const position = radialPosition(
+                        neighbor.metric,
+                        neighbor.rank,
+                        neighbor.value,
+                      )
 
-                    return (
-                      <S.NeighborButton
-                        aria-label={`Select ${neighbor.id}`}
-                        aria-pressed={selectedIds.includes(neighbor.id)}
-                        key={neighbor.id}
-                        title={`${metricValueLabel(neighbor.metric)}: ${neighbor.value.toFixed(2)}`}
-                        type="button"
-                        $selected={selectedIds.includes(neighbor.id)}
-                        $x={position.x}
-                        $y={position.y}
-                        onClick={() => select(neighbor.id)}
-                        onKeyDown={(event) =>
-                          selectFromKeyboard(event, [neighbor.id])
-                        }
-                      >
-                        {neighbor.rank}
-                      </S.NeighborButton>
-                    )
-                  })}
-                </S.RadialPlot>
-                <Col gap="xs">
-                  {threshold ? (
-                    <Text size="XS">
-                      {threshold.label} {thresholdOperator(threshold.operator)}{' '}
-                      {threshold.value.toFixed(2)} · {threshold.provenance}
-                    </Text>
-                  ) : (
-                    <Text color="subdued" size="XS">
-                      Metric threshold ring unavailable: no response-backed
-                      threshold.
-                    </Text>
-                  )}
-                  {topKBoundary !== undefined ? (
-                    <Text size="XS">Top-{topKBoundary} result boundary</Text>
-                  ) : (
-                    <Text color="subdued" size="XS">
-                      Top-k boundary ring unavailable: query k was not supplied.
-                    </Text>
-                  )}
-                </Col>
+                      return (
+                        <S.NeighborButton
+                          aria-label={`Select ${neighbor.id}`}
+                          aria-pressed={selectedIds.includes(neighbor.id)}
+                          key={neighbor.id}
+                          title={`${metricValueLabel(neighbor.metric)}: ${neighbor.value.toFixed(2)}`}
+                          type="button"
+                          $selected={selectedIds.includes(neighbor.id)}
+                          $x={position.x}
+                          $y={position.y}
+                          onClick={() => select(neighbor.id)}
+                          onKeyDown={(event) =>
+                            selectFromKeyboard(event, [neighbor.id])
+                          }
+                        >
+                          {neighbor.rank}
+                        </S.NeighborButton>
+                      )
+                    })}
+                  </S.RadialPlot>
+                </S.NeighborEvidenceLayout>
               </S.Section>
             </S.EvidenceScrollport>
           </S.EvidencePanel>
-          <S.InspectorPanel
-            as="aside"
-            aria-labelledby="distribution-heading"
-          >
+          <S.InspectorPanel as="aside" aria-labelledby="distribution-heading">
             <S.EvidenceScrollport
               aria-label="Distribution and results scrollable content"
               data-testid="query-lab-inspector-scrollport"
@@ -311,8 +320,8 @@ export const QueryLab = ({
                   Result / source sample distribution
                 </Title>
                 <Text color="subdued" size="XS">
-                  Score/distance axis · bounded query result sample ·
-                  Freshness: {freshness}
+                  Score/distance axis · bounded query result sample · Freshness:{' '}
+                  {freshness}
                 </Text>
                 <Text>{metricLabel}</Text>
                 <Text>
@@ -380,8 +389,8 @@ export const QueryLab = ({
                       }
                     >
                       Rank {gap.afterRank} → {gap.beforeRank} ·{' '}
-                      {gap.value.toFixed(2)} → {gap.nextValue.toFixed(2)} ·
-                      gap {gap.gap.toFixed(2)}
+                      {gap.value.toFixed(2)} → {gap.nextValue.toFixed(2)} · gap{' '}
+                      {gap.gap.toFixed(2)}
                     </S.WaterfallRow>
                   ))}
                 </Col>
@@ -459,6 +468,11 @@ export const QueryLab = ({
             Evidence unavailable
           </Title>
           <Text>{stateCopy[status]}</Text>
+          {focusedId && (
+            <Text color="subdued" size="XS">
+              Selected document: {focusedId}
+            </Text>
+          )}
           <Text color="subdued" size="XS">
             Review the Workbench response or rerun the command. No additional
             Redis command was issued.

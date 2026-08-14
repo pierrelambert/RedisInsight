@@ -175,6 +175,8 @@ export const recommendVectorSetTuning = (
 export const recommendSearchIndexTuning = (
   profile: SearchIndexProfile,
 ): TuneRecommendation[] => {
+  if (profile.algorithm?.toLowerCase() !== 'hnsw') return []
+
   const recommendations: TuneRecommendation[] = []
   const count = profile.count ?? 0
 

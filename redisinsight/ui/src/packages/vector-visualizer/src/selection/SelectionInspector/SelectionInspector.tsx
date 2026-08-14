@@ -4,6 +4,7 @@ import { Button } from 'uiSrc/components/base/forms/buttons'
 import { Col } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 
+import { redisSimilarityFromDistance } from '../../metrics'
 import * as S from './SelectionInspector.styles'
 import type { SelectionInspectorProps } from './SelectionInspector.types'
 
@@ -27,7 +28,7 @@ export const SelectionInspector = ({
           {row.metric === 'score' ? 'Score' : 'Similarity'}:{' '}
           {Number.isFinite(row.value)
             ? (row.metric === 'distance'
-                ? 1 - row.value
+                ? redisSimilarityFromDistance(row.value)
                 : row.value
               ).toFixed(4)
             : 'Unavailable'}
@@ -66,7 +67,7 @@ export const SelectionInspector = ({
                 variant="secondary-ghost"
                 onClick={() => onExportRow(row)}
               >
-                Export row
+                Export document
               </Button>
             )}
           </S.Actions>

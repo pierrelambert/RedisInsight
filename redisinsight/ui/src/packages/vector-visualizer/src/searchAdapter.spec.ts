@@ -76,8 +76,7 @@ const int8Bytes = (values: number[]): Uint8Array => {
   return new Uint8Array(buf)
 }
 
-const uint8Bytes = (values: number[]): Uint8Array =>
-  new Uint8Array(values)
+const uint8Bytes = (values: number[]): Uint8Array => new Uint8Array(values)
 
 const makeResp2Reply = (
   id: string,
@@ -246,12 +245,22 @@ describe('parseSearchInfo', () => {
   )
 
   it('leaves SVS-VAMANA fields undefined for HNSW indexes', () => {
-    const row = makeVectorFieldRow()
+    const row = makeVectorFieldRow([
+      'm',
+      '32',
+      'ef_construction',
+      '300',
+      'ef_runtime',
+      '150',
+    ])
     const reply = makeSearchInfoReply([row])
     const result = parseSearchInfo(reply)
 
     const field = result.vectorFields[0]
     expect(field.algorithm).toBe('hnsw')
+    expect(field.m).toBe(32)
+    expect(field.efConstruction).toBe(300)
+    expect(field.efRuntime).toBe(150)
     expect(field.compression).toBeUndefined()
     expect(field.graphMaxDegree).toBeUndefined()
     expect(field.searchWindowSize).toBeUndefined()
@@ -402,7 +411,10 @@ describe('planProfileRangeQuery', () => {
     })
 
     expect(result.readOnly).toBe(true)
-    expect(result.provenance).toEqual({ kind: 'measured', exactness: 'unknown' })
+    expect(result.provenance).toEqual({
+      kind: 'measured',
+      exactness: 'unknown',
+    })
   })
 })
 
@@ -445,9 +457,7 @@ describe('planAggregateQuery', () => {
   it('builds AVG reduce on a distance field with alias', () => {
     const result = planAggregateQuery({
       ...baseAggregateInput,
-      reduceOps: [
-        { function: 'AVG', field: '__vv_metric', alias: 'avg_dist' },
-      ],
+      reduceOps: [{ function: 'AVG', field: '__vv_metric', alias: 'avg_dist' }],
     })
 
     const reduceIndex = result.arguments.indexOf('REDUCE')
@@ -649,7 +659,7 @@ describe('planHybridQuery', () => {
     expect(result.arguments.slice(combineIndex, combineIndex + 8)).toEqual([
       'COMBINE',
       'RRF',
-      '4',
+      '6',
       'CONSTANT',
       '60',
       'WINDOW',
@@ -670,7 +680,7 @@ describe('planHybridQuery', () => {
     expect(result.arguments.slice(combineIndex, combineIndex + 8)).toEqual([
       'COMBINE',
       'LINEAR',
-      '4',
+      '6',
       'ALPHA',
       '0.7',
       'BETA',
@@ -686,14 +696,15 @@ describe('planHybridQuery', () => {
     })
 
     const knnIndex = result.arguments.indexOf('KNN')
-    expect(result.arguments.slice(knnIndex, knnIndex + 7)).toEqual([
+    expect(result.arguments.slice(knnIndex, knnIndex + 8)).toEqual([
       'KNN',
-      '4',
+      '6',
       'K',
       '50',
       'EF_RUNTIME',
       '200',
       'YIELD_SCORE_AS',
+      'vector_score',
     ])
   })
 
@@ -705,12 +716,13 @@ describe('planHybridQuery', () => {
     })
 
     const rangeIndex = result.arguments.indexOf('RANGE')
-    expect(result.arguments.slice(rangeIndex, rangeIndex + 5)).toEqual([
+    expect(result.arguments.slice(rangeIndex, rangeIndex + 6)).toEqual([
       'RANGE',
-      '2',
+      '4',
       'RADIUS',
       '0.5',
       'YIELD_SCORE_AS',
+      'vector_score',
     ])
   })
 
@@ -723,14 +735,15 @@ describe('planHybridQuery', () => {
     })
 
     const rangeIndex = result.arguments.indexOf('RANGE')
-    expect(result.arguments.slice(rangeIndex, rangeIndex + 7)).toEqual([
+    expect(result.arguments.slice(rangeIndex, rangeIndex + 8)).toEqual([
       'RANGE',
-      '4',
+      '6',
       'RADIUS',
       '0.5',
       'EPSILON',
       '0.01',
       'YIELD_SCORE_AS',
+      'vector_score',
     ])
   })
 
@@ -767,7 +780,19 @@ describe('planHybridQuery', () => {
     expect(result.arguments[paramsIndex + 3]).toBe(baseHybridInput.vector)
   })
 
-  it('builds KNN with SEARCH_WINDOW_SIZE using the nargs convention', () => {
+  it('sorts by the yielded hybrid score using the FT.HYBRID nargs convention', () => {
+    const result = planHybridQuery(baseHybridInput)
+
+    const sortIndex = result.arguments.indexOf('SORTBY')
+    expect(result.arguments.slice(sortIndex, sortIndex + 4)).toEqual([
+      'SORTBY',
+      '2',
+      'hybrid_score',
+      'ASC',
+    ])
+  })
+
+  it('does not send SEARCH_WINDOW_SIZE in FT.HYBRID KNN arguments', () => {
     const result = planHybridQuery({
       ...baseHybridInput,
       searchWindowSize: 50,
@@ -775,9 +800,11 @@ describe('planHybridQuery', () => {
 
     const knnIndex = result.arguments.indexOf('KNN')
     const knnNargs = Number(result.arguments[knnIndex + 1])
-    const knnArgs = result.arguments.slice(knnIndex + 2, knnIndex + 2 + knnNargs)
-    expect(knnArgs).toContain('SEARCH_WINDOW_SIZE')
-    expect(knnArgs[knnArgs.indexOf('SEARCH_WINDOW_SIZE') + 1]).toBe('50')
+    const knnArgs = result.arguments.slice(
+      knnIndex + 2,
+      knnIndex + 2 + knnNargs,
+    )
+    expect(knnArgs).not.toContain('SEARCH_WINDOW_SIZE')
   })
 
   it('builds KNN with SHARD_K_RATIO using the nargs convention', () => {
@@ -788,7 +815,10 @@ describe('planHybridQuery', () => {
 
     const knnIndex = result.arguments.indexOf('KNN')
     const knnNargs = Number(result.arguments[knnIndex + 1])
-    const knnArgs = result.arguments.slice(knnIndex + 2, knnIndex + 2 + knnNargs)
+    const knnArgs = result.arguments.slice(
+      knnIndex + 2,
+      knnIndex + 2 + knnNargs,
+    )
     expect(knnArgs).toContain('SHARD_K_RATIO')
     expect(knnArgs[knnArgs.indexOf('SHARD_K_RATIO') + 1]).toBe('0.5')
   })
@@ -809,6 +839,23 @@ describe('buildRuntimeParamTokens via planProfileSearchNeighbors', () => {
     const count = Number(args[paramsIndex + 1])
     return args.slice(paramsIndex + 2, paramsIndex + 2 + count)
   }
+
+  it('adds an explicit FT.SEARCH LIMIT matching the KNN neighbor limit', () => {
+    const result = planProfileSearchNeighbors({
+      ...basePlanInput,
+      limit: 20,
+    })
+
+    const query = result.arguments[result.arguments.indexOf('QUERY') + 1]
+    const limitIndex = result.arguments.indexOf('LIMIT')
+
+    expect(query).toBe('*=>[KNN 20 @embedding $vv_anchor AS __vv_metric]')
+    expect(result.arguments.slice(limitIndex, limitIndex + 3)).toEqual([
+      'LIMIT',
+      '0',
+      '20',
+    ])
+  })
 
   it('includes $SHARD_K_RATIO with $ prefix in FT.SEARCH PARAMS', () => {
     const result = planProfileSearchNeighbors({

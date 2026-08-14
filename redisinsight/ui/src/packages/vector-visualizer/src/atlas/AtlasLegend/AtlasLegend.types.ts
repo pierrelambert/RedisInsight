@@ -7,5 +7,6 @@ export interface AtlasLegendEntry {
 
 export interface AtlasLegendProps {
   entries: AtlasLegendEntry[]
+  maxVisible?: number
   onEntryClick?: (label: string) => void
 }

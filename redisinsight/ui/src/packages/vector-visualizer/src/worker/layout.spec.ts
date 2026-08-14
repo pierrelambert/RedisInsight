@@ -3,10 +3,13 @@ import {
   LayoutWorkerClient,
   WorkerLike,
   measureBoundedNeighborhoodPreservation,
+  projectPCA,
   rankNearestNeighborsForMetric,
   runBoundedMetricEvidence,
   runLayout,
+  runPCA,
 } from './layout'
+import { normalizeCosineVectors } from '../sampling/sampling'
 
 const job = {
   version: 1 as const,
@@ -114,9 +117,9 @@ describe('atlas worker protocol', () => {
   })
 
   it('returns typed unsupported output and rejects stale jobs', () => {
-    expect(runLayout({ ...job, algorithm: 'pca' })).toEqual({
+    expect(runLayout({ ...job, algorithm: 'tsne' })).toEqual({
       type: 'unsupported',
-      algorithm: 'pca',
+      algorithm: 'tsne',
     })
     const controller = new LayoutController()
     const first = controller.start(job)
@@ -314,6 +317,112 @@ describe('atlas worker protocol', () => {
     })
 
     await expect(result).resolves.toMatchObject({ type: 'health-complete' })
+  })
+
+  it('dispatches pca jobs through runLayout to a complete PCA layout', () => {
+    const result = runLayout({ ...job, algorithm: 'pca' })
+
+    expect(result).toMatchObject({ type: 'complete', jobId: 'one' })
+    if (result.type === 'complete') expect(result.coordinates.length).toBe(4)
+  })
+
+  it('recovers a 2D structure embedded in 3D with near-complete variance explained', () => {
+    const vectors = new Float32Array([
+      2, 0, 0, 0, 2, 0, -2, 0, 0, 0, -2, 0, 1, 1, 0, -1, -1, 0,
+    ])
+
+    const { coordinates, varianceExplainedRatio } = projectPCA(vectors, 6, 3)
+
+    expect(varianceExplainedRatio).toBeCloseTo(1, 5)
+    expect(coordinates.length).toBe(12)
+  })
+
+  it('returns [0, 0] for a single point', () => {
+    expect(
+      runPCA({
+        ...job,
+        algorithm: 'pca',
+        count: 1,
+        dimensions: 3,
+        vectors: new Float32Array([1, 2, 3]),
+      }),
+    ).toEqual({
+      type: 'complete',
+      jobId: 'one',
+      coordinates: new Float32Array([0, 0]),
+      quality: { kind: 'unknown', reason: 'insufficient-points' },
+    })
+  })
+
+  it('returns an empty layout for zero count', () => {
+    expect(
+      runPCA({
+        ...job,
+        algorithm: 'pca',
+        count: 0,
+        dimensions: undefined,
+        vectors: undefined,
+      }),
+    ).toEqual({
+      type: 'complete',
+      jobId: 'one',
+      coordinates: new Float32Array(),
+      quality: { kind: 'unknown', reason: 'insufficient-points' },
+    })
+  })
+
+  it('computes the variance explained ratio for data with known principal components', () => {
+    const vectors = new Float32Array([
+      3, 0, 0, -3, 0, 0, 0, 2, 0, 0, -2, 0, 0, 0, 1, 0, 0, -1,
+    ])
+
+    const { varianceExplainedRatio } = projectPCA(vectors, 6, 3)
+
+    expect(varianceExplainedRatio).toBeCloseTo(26 / 28, 5)
+  })
+
+  it('normalizes vectors before PCA when metric is cosine, matching the UMAP path', () => {
+    const rawVectors = new Float32Array([3, 4, 0, 5, -3, 4])
+    const normalized = normalizeCosineVectors(rawVectors, 3)
+    const direct = projectPCA(normalized, 3, 2)
+
+    const viaJob = runPCA({
+      ...job,
+      algorithm: 'pca',
+      metric: 'cosine',
+      count: 3,
+      dimensions: 2,
+      vectors: rawVectors,
+    })
+
+    expect(viaJob).toMatchObject({ type: 'complete' })
+    if (viaJob.type === 'complete')
+      expect(Array.from(viaJob.coordinates)).toEqual(
+        Array.from(direct.coordinates),
+      )
+  })
+
+  it('measures bounded neighborhood preservation quality for PCA layouts', () => {
+    const result = runLayout({
+      ...job,
+      algorithm: 'pca',
+      metric: 'l2',
+      count: 4,
+      dimensions: 3,
+      vectors: new Float32Array([2, 0, 0, 0, 2, 0, -2, 0, 0, 0, -2, 0]),
+      parameters: { nNeighbors: 2 },
+    })
+
+    expect(result).toMatchObject({
+      type: 'complete',
+      quality: {
+        kind: 'measured',
+        name: 'bounded-k-neighbor-preservation',
+        sampleSize: 4,
+        exactness: 'sample-exact',
+        freshness: 'unknown',
+      },
+    })
   })
 })
 

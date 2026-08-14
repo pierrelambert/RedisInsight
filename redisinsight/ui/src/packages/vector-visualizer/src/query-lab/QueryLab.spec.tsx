@@ -81,6 +81,9 @@ describe('QueryLab', () => {
       screen.getByRole('heading', { name: 'Response evidence' }),
     ).toBeInTheDocument()
     expect(
+      screen.getByTestId('query-lab-neighbor-evidence-layout'),
+    ).toBeInTheDocument()
+    expect(
       screen.getByRole('heading', { name: 'Returned results' }),
     ).toBeInTheDocument()
     expect(
@@ -191,6 +194,23 @@ describe('QueryLab', () => {
     expect(onSelectionChange).toHaveBeenCalledWith([
       defaultProps.neighbors[1].id,
     ])
+  })
+
+  it('does not mask a non-ready query state behind the selected document label', () => {
+    renderComponent({
+      status: 'recoverable-error',
+      neighbors: [],
+      selectedIds: [defaultProps.neighbors[0].id],
+      focusedId: defaultProps.neighbors[0].id,
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Query evidence could not be loaded. Retry.',
+    )
+    expect(
+      screen.getByTestId('query-lab-state-recoverable-error'),
+    ).toHaveTextContent(`Selected document: ${defaultProps.neighbors[0].id}`)
+    expect(screen.queryByTestId('query-lab-workspace')).not.toBeInTheDocument()
   })
 
   it('labels radial angle as layout-only and preserves metric-aware exact values', () => {

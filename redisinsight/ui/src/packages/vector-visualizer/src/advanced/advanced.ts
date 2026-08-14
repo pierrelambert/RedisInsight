@@ -7,6 +7,7 @@ import {
 } from '../contracts'
 import { parseSearchProfile } from '../searchAdapter'
 import { parseVectorSetMember } from '../vectorSetAdapter'
+import type { QueryLabProfile } from '../query-lab/QueryLab/QueryLab.types'
 
 export interface TopologyAdjacency {
   layer: number
@@ -92,6 +93,24 @@ export interface VectorSetProfile {
 export const parseSearchExecutionEvidence = (
   reply: unknown,
 ): SearchExecutionEvidence => {
+  const normalized = reply as Partial<QueryLabProfile>
+  if (normalized.kind === 'full') {
+    const facts = Object.fromEntries(
+      Object.entries(normalized.facts ?? {}).flatMap(([name, value]) =>
+        value === undefined ? [] : [[name, value]],
+      ),
+    )
+    if (!Object.keys(facts).length && !normalized.stages?.length)
+      return { kind: 'malformed' }
+    const vectorMode =
+      facts['Vector mode'] ?? facts['Vector execution mode'] ?? 'Unavailable'
+    return {
+      kind: 'ready',
+      facts,
+      ...(vectorMode === 'Unavailable' ? { vectorMode } : {}),
+    }
+  }
+
   const profileValue =
     recordValue(toRecord(reply), 'Profile') ??
     (Array.isArray(reply) && reply.length === 2 ? reply[1] : undefined)

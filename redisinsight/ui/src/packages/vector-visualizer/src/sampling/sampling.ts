@@ -50,7 +50,10 @@ export const normalizeCosineVectors = (
 }
 
 export const validateLayoutJob = (job: LayoutJobV1) => {
-  if (job.version !== 1 || job.algorithm !== 'umap')
+  if (
+    job.version !== 1 ||
+    (job.algorithm !== 'umap' && job.algorithm !== 'pca')
+  )
     return { valid: false as const, reason: 'unsupported-algorithm' }
   if (job.count === 0 && !job.vectors && !job.dimensions)
     return { valid: true as const }

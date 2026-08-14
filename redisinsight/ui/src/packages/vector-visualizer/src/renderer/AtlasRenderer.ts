@@ -78,6 +78,11 @@ uniform sampler2D densityMap;
 out vec4 fragmentColor;
 void main() {
   float density = texture(densityMap, texCoord).r;
+  float edgeFade = smoothstep(0.0, 0.06, texCoord.x)
+                 * smoothstep(0.0, 0.06, 1.0 - texCoord.x)
+                 * smoothstep(0.0, 0.06, texCoord.y)
+                 * smoothstep(0.0, 0.06, 1.0 - texCoord.y);
+  density *= edgeFade;
   if (density < 0.05) discard;
   fragmentColor = vec4(0.2, 0.4, 0.8, density * 0.6);
 }`
@@ -103,7 +108,8 @@ void main() {
   if (baseShape > 1.5 && baseShape < 2.5 && (centered.y < -0.5 || centered.y > 0.5 - abs(centered.x))) discard;
   if (baseShape > 2.5 && square > 0.5) discard;
   bool outerRing = (selectedRing > 0.5 || hoverRing > 0.5) && circle > 0.35;
-  fragmentColor = vec4(outerRing ? accentColorVarying : pointColorVarying, 1.0);
+  float edgeAlpha = baseShape < 0.5 ? smoothstep(0.5, 0.44, circle) : 1.0;
+  fragmentColor = vec4(outerRing ? accentColorVarying : pointColorVarying, edgeAlpha);
 }`
 
 export class AtlasRenderer {
@@ -132,6 +138,8 @@ export class AtlasRenderer {
   private hoveredId?: string
 
   private transform: AtlasTransform = { scale: 1, offsetX: 0, offsetY: 0 }
+
+  private pointSignature = ''
 
   private dragStart?: {
     originX: number
@@ -176,6 +184,11 @@ export class AtlasRenderer {
   ): void {
     if (points.length !== ids.length * 2)
       throw new Error('Atlas coordinates must map exactly to sample IDs')
+    const nextSignature = this.signature(points, ids)
+    if (nextSignature !== this.pointSignature) {
+      this.pointSignature = nextSignature
+      this.resetTransform(false)
+    }
     this.points = normalizeCoordinates(points)
     this.ids = [...ids]
     this.palette = palette
@@ -231,6 +244,12 @@ export class AtlasRenderer {
   setDensityVisible(visible: boolean): void {
     this.densityVisible = visible
     this.draw()
+  }
+
+  resetTransform(shouldDraw = true): void {
+    this.transform = { scale: 1, offsetX: 0, offsetY: 0 }
+    this.options.onTransformChange?.({ ...this.transform })
+    if (shouldDraw) this.draw()
   }
 
   destroy(): void {
@@ -658,6 +677,17 @@ export class AtlasRenderer {
         return base + selected + hovered
       }),
     )
+  }
+
+  private signature(points: Float32Array, ids: readonly string[]): string {
+    return [
+      ids.length,
+      ids[0] ?? '',
+      ids[ids.length - 1] ?? '',
+      points.length,
+      points[0] ?? '',
+      points[points.length - 1] ?? '',
+    ].join(':')
   }
 }
 

@@ -2,7 +2,7 @@ import React from 'react'
 
 import { BaseButton as Button } from 'uiSrc/components/base/forms/buttons/Button'
 import TextInput from 'uiSrc/components/base/inputs/TextInput'
-import { Col, Row } from 'uiSrc/components/base/layout/flex'
+import { Row } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 
 import { type UnknownHealthEvidence } from '../calculations'
@@ -56,7 +56,7 @@ const UnknownEvidence = ({ evidence }: { evidence: UnknownHealthEvidence }) => (
 
 export const XRay = ({ facts }: { facts: XRayFact[] }) => (
   <S.EvidencePanel aria-label="Health X-ray">
-    <Title component="h2" size="S">
+    <Title component="h2" size="XS">
       X-ray summary
     </Title>
     {!facts.length ? (
@@ -74,14 +74,14 @@ export const XRay = ({ facts }: { facts: XRayFact[] }) => (
               data-testid={factTestId(fact.label)}
               key={fact.label}
             >
-              <Col gap="xs">
-                <Text component="span" variant="semiBold">
+              <S.MetricTileHeader gap="xs">
+                <S.MetricLabel component="span" size="XS" variant="semiBold">
                   {fact.label}
-                </Text>
-                <Title component="h3" size="S">
+                </S.MetricLabel>
+                <S.MetricValue component="h3" size="XS">
                   {fact.value}
-                </Title>
-                <Text
+                </S.MetricValue>
+                <S.MetricStatus
                   color={
                     severity === 'attention'
                       ? 'attention'
@@ -91,14 +91,20 @@ export const XRay = ({ facts }: { facts: XRayFact[] }) => (
                           ? 'notice'
                           : 'subdued'
                   }
+                  size="XS"
                 >
                   {factStatusCopy(fact.status)}
+                </S.MetricStatus>
+              </S.MetricTileHeader>
+              <S.MetricFormula>
+                <summary>Evidence</summary>
+                <Text color="subdued" size="XS">
+                  {fact.formula}
                 </Text>
-                <Text color="subdued">
-                  Formula: {fact.formula} · sample: {fact.sampleCount} ·{' '}
-                  {freshnessCopy(fact.freshness)}
+                <Text color="subdued" size="XS">
+                  Sample {fact.sampleCount} · {freshnessCopy(fact.freshness)}
                 </Text>
-              </Col>
+              </S.MetricFormula>
             </S.MetricTile>
           )
         })}

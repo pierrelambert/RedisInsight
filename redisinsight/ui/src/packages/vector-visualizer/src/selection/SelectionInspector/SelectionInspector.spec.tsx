@@ -64,6 +64,22 @@ describe('SelectionInspector', () => {
     expect(screen.queryByText('Similarity: NaN')).not.toBeInTheDocument()
   })
 
+  it('keeps Redis cosine distances over one as non-negative similarities', () => {
+    renderComponent({
+      row: {
+        id: 'doc:cosine',
+        rank: 1,
+        value: 1.0037,
+        metric: 'distance',
+        plotted: true,
+        selected: true,
+      },
+    })
+
+    expect(screen.getByText('Similarity: 0.9963')).toBeInTheDocument()
+    expect(screen.queryByText(/Similarity: -/)).not.toBeInTheDocument()
+  })
+
   it('renders selected metadata and explicit record actions', () => {
     const onCopyId = jest.fn()
     const onExportRow = jest.fn()
@@ -92,7 +108,7 @@ describe('SelectionInspector', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Run neighbors' }))
     fireEvent.click(screen.getByRole('button', { name: 'Copy ID' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Export row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export document' }))
     expect(onRunNeighbors).toHaveBeenCalledWith('doc:metadata')
     expect(onCopyId).toHaveBeenCalledWith('doc:metadata')
     expect(onExportRow).toHaveBeenCalledWith(row)

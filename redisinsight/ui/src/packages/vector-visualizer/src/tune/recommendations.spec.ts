@@ -113,6 +113,7 @@ describe('recommendVectorSetTuning', () => {
 describe('recommendSearchIndexTuning', () => {
   it('recommends a moderate EF_RUNTIME range for a small index', () => {
     const recommendations = recommendSearchIndexTuning({
+      algorithm: 'hnsw',
       count: 5_000,
       dimensions: 128,
     })
@@ -124,6 +125,7 @@ describe('recommendSearchIndexTuning', () => {
 
   it('recommends a higher EF_RUNTIME range for a large index', () => {
     const recommendations = recommendSearchIndexTuning({
+      algorithm: 'hnsw',
       count: 500_000,
       dimensions: 128,
     })
@@ -134,7 +136,10 @@ describe('recommendSearchIndexTuning', () => {
   })
 
   it('includes EF_CONSTRUCTION guidance', () => {
-    const recommendations = recommendSearchIndexTuning({ count: 5_000 })
+    const recommendations = recommendSearchIndexTuning({
+      algorithm: 'hnsw',
+      count: 5_000,
+    })
     const efConstructionRecommendation = recommendations.find(
       (recommendation) => recommendation.parameter === 'EF_CONSTRUCTION',
     )
@@ -156,6 +161,7 @@ describe('recommendSearchIndexTuning', () => {
 
   it('flags M values above 64 as rarely justified', () => {
     const recommendations = recommendSearchIndexTuning({
+      algorithm: 'hnsw',
       count: 5_000,
       dimensions: 128,
       m: 96,
@@ -168,19 +174,41 @@ describe('recommendSearchIndexTuning', () => {
     expect(excessiveMRecommendation).toBeDefined()
   })
 
-  it('returns safe defaults for an empty profile without crashing', () => {
+  it('omits HNSW recommendations when a Search index is not HNSW', () => {
     expect(() => recommendSearchIndexTuning({})).not.toThrow()
     const recommendations = recommendSearchIndexTuning({})
-    expect(recommendations.length).toBeGreaterThan(0)
-    recommendations.forEach((recommendation) => {
-      expect(recommendation.parameter).toBeTruthy()
-      expect(recommendation.guidance).toBeTruthy()
-      expect(recommendation.impact).toBeTruthy()
+    expect(recommendations).toEqual([])
+  })
+
+  it('uses current HNSW values discovered from FT.INFO', () => {
+    const recommendations = recommendSearchIndexTuning({
+      algorithm: 'hnsw',
+      count: 5_000,
+      dimensions: 768,
+      m: 32,
+      efConstruction: 300,
+      efRuntime: 150,
     })
+
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'EF_RUNTIME',
+      )?.currentValue,
+    ).toBe(150)
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'EF_CONSTRUCTION',
+      )?.currentValue,
+    ).toBe(300)
+    expect(
+      recommendations.find((recommendation) => recommendation.parameter === 'M')
+        ?.currentValue,
+    ).toBe(32)
   })
 
   it('sorts recommendations by confidence, highest first', () => {
     const recommendations = recommendSearchIndexTuning({
+      algorithm: 'hnsw',
       count: 5_000,
       dimensions: 600,
       m: 96,

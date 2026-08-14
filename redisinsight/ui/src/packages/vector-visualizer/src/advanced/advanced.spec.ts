@@ -107,4 +107,30 @@ describe('Advanced topology and profile evidence', () => {
       facts: { 'Total profile time': '2.5', 'Vector mode': 'BATCHES' },
     })
   })
+
+  it('accepts the normalized Search profile produced by native query orchestration', () => {
+    expect(
+      parseSearchExecutionEvidence({
+        kind: 'full',
+        facts: {
+          'Total profile time': '2.5',
+          'Vector mode': 'BATCHES',
+        },
+        stages: [{ name: 'VECTOR', count: '10' }],
+      }),
+    ).toEqual({
+      kind: 'ready',
+      facts: { 'Total profile time': '2.5', 'Vector mode': 'BATCHES' },
+    })
+  })
+
+  it('keeps an empty normalized Search profile unavailable', () => {
+    expect(
+      parseSearchExecutionEvidence({
+        kind: 'full',
+        facts: {},
+        stages: [],
+      }),
+    ).toEqual({ kind: 'malformed' })
+  })
 })

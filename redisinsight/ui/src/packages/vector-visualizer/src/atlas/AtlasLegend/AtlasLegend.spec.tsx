@@ -10,10 +10,15 @@ import type { AtlasLegendEntry } from './AtlasLegend.types'
 const renderComponent = (
   entries: AtlasLegendEntry[],
   onEntryClick?: (label: string) => void,
+  maxVisible?: number,
 ) =>
   render(
     <ThemeProvider>
-      <AtlasLegend entries={entries} onEntryClick={onEntryClick} />
+      <AtlasLegend
+        entries={entries}
+        maxVisible={maxVisible}
+        onEntryClick={onEntryClick}
+      />
     </ThemeProvider>,
   )
 
@@ -36,10 +41,7 @@ describe('AtlasLegend', () => {
 
   it('calls onEntryClick with the label when an entry is clicked', async () => {
     const onClick = jest.fn()
-    renderComponent(
-      [{ label: 'MyLabel', color: '#aabbcc' }],
-      onClick,
-    )
+    renderComponent([{ label: 'MyLabel', color: '#aabbcc' }], onClick)
 
     await userEvent.click(screen.getByLabelText('MyLabel'))
     expect(onClick).toHaveBeenCalledWith('MyLabel')
@@ -56,5 +58,23 @@ describe('AtlasLegend', () => {
     renderComponent([{ label: 'A', color: '#000' }])
 
     expect(screen.getByTestId('atlas-legend')).toBeInTheDocument()
+  })
+
+  it('limits visible entries until expanded', async () => {
+    const entries = Array.from({ length: 4 }, (_, index) => ({
+      label: `Entry ${index + 1}`,
+      color: '#000',
+    }))
+
+    renderComponent(entries, undefined, 2)
+
+    expect(screen.getByLabelText('Entry 1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Entry 2')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Entry 3')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show all 4' }))
+
+    expect(screen.getByLabelText('Entry 3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeVisible()
   })
 })

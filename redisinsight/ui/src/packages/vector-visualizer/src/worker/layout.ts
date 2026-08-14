@@ -17,6 +17,8 @@ export type LayoutQuality =
 const QUALITY_SAMPLE_LIMIT = 512
 const DEFAULT_UMAP_NEIGHBORS = 15
 const INNER_PRODUCT_EXPONENT_LIMIT = 50
+const MAX_POWER_ITERATIONS = 100
+const POWER_ITERATION_CONVERGENCE_TOLERANCE = 1e-10
 
 export interface BoundedMetricEvidenceJob {
   jobId: string
@@ -140,7 +142,7 @@ type Complete = {
   quality: LayoutQuality
   timing?: { layoutMs: number }
 }
-type Unsupported = { type: 'unsupported'; algorithm: 'pca' | 'tsne' }
+type Unsupported = { type: 'unsupported'; algorithm: 'tsne' }
 type Invalid = { type: 'invalid'; reason: string }
 export type LayoutResult = Complete | Unsupported | Invalid
 
@@ -306,11 +308,192 @@ export const measureBoundedNeighborhoodPreservation = ({
   }
 }
 
+export interface PCAProjection {
+  coordinates: Float32Array
+  varianceExplainedRatio: number
+}
+
+type Eigenpair = { vector: Float64Array; eigenvalue: number }
+
+const dotProduct = (left: Float64Array, right: Float64Array) => {
+  let sum = 0
+  for (let index = 0; index < left.length; index += 1)
+    sum += left[index] * right[index]
+  return sum
+}
+
+const normalizeInPlace = (vector: Float64Array) => {
+  const norm = Math.sqrt(dotProduct(vector, vector))
+  if (norm > 0)
+    for (let index = 0; index < vector.length; index += 1) vector[index] /= norm
+  return vector
+}
+
+/** Index-weighted, not uniform: avoids symmetry ties with axis-aligned test data. */
+const seedVector = (dimensions: number): Float64Array => {
+  const vector = new Float64Array(dimensions)
+  for (let index = 0; index < dimensions; index += 1) vector[index] = index + 1
+  return normalizeInPlace(vector)
+}
+
+/**
+ * Applies the implicit covariance operator X^T X to `vector` without
+ * materializing a d×d covariance or n×n Gram matrix. Each pass costs O(n·d),
+ * which keeps bounded local samples viable for high-dimensional vectors.
+ */
+const applyCovariance = (
+  centered: Float64Array,
+  count: number,
+  dimensions: number,
+  vector: Float64Array,
+): Float64Array => {
+  const projected = new Float64Array(count)
+  for (let row = 0; row < count; row += 1) {
+    let sum = 0
+    for (let col = 0; col < dimensions; col += 1)
+      sum += centered[row * dimensions + col] * vector[col]
+    projected[row] = sum
+  }
+  const result = new Float64Array(dimensions)
+  for (let row = 0; row < count; row += 1) {
+    const weight = projected[row]
+    if (!weight) continue
+    for (let col = 0; col < dimensions; col += 1)
+      result[col] += centered[row * dimensions + col] * weight
+  }
+  return result
+}
+
+const powerIterateTopEigenpair = (
+  centered: Float64Array,
+  count: number,
+  dimensions: number,
+  deflate?: Eigenpair,
+): Eigenpair => {
+  let vector = seedVector(dimensions)
+  let eigenvalue = 0
+  for (let iteration = 0; iteration < MAX_POWER_ITERATIONS; iteration += 1) {
+    const next = applyCovariance(centered, count, dimensions, vector)
+    if (deflate) {
+      const overlap = dotProduct(deflate.vector, vector) * deflate.eigenvalue
+      for (let index = 0; index < dimensions; index += 1)
+        next[index] -= overlap * deflate.vector[index]
+      const residual = dotProduct(deflate.vector, next)
+      for (let index = 0; index < dimensions; index += 1)
+        next[index] -= residual * deflate.vector[index]
+    }
+    const norm = Math.sqrt(dotProduct(next, next))
+    if (norm === 0) {
+      vector = next
+      eigenvalue = 0
+      break
+    }
+    for (let index = 0; index < dimensions; index += 1) next[index] /= norm
+    const similarity = Math.abs(dotProduct(next, vector))
+    vector = next
+    eigenvalue = norm
+    if (1 - similarity < POWER_ITERATION_CONVERGENCE_TOLERANCE) break
+  }
+  return { vector, eigenvalue }
+}
+
+export const projectPCA = (
+  vectors: Float32Array,
+  count: number,
+  dimensions: number,
+): PCAProjection => {
+  const mean = new Float64Array(dimensions)
+  for (let row = 0; row < count; row += 1)
+    for (let col = 0; col < dimensions; col += 1)
+      mean[col] += vectors[row * dimensions + col]
+  for (let col = 0; col < dimensions; col += 1) mean[col] /= count
+
+  const centered = new Float64Array(count * dimensions)
+  for (let row = 0; row < count; row += 1)
+    for (let col = 0; col < dimensions; col += 1)
+      centered[row * dimensions + col] =
+        vectors[row * dimensions + col] - mean[col]
+
+  let totalVariance = 0
+  for (let index = 0; index < centered.length; index += 1)
+    totalVariance += centered[index] * centered[index]
+
+  const first = powerIterateTopEigenpair(centered, count, dimensions)
+  const second =
+    dimensions > 1
+      ? powerIterateTopEigenpair(centered, count, dimensions, first)
+      : { vector: new Float64Array(dimensions), eigenvalue: 0 }
+
+  const coordinates = new Float32Array(count * 2)
+  for (let row = 0; row < count; row += 1) {
+    let firstScore = 0
+    let secondScore = 0
+    for (let col = 0; col < dimensions; col += 1) {
+      const value = centered[row * dimensions + col]
+      firstScore += value * first.vector[col]
+      secondScore += value * second.vector[col]
+    }
+    coordinates[row * 2] = firstScore
+    coordinates[row * 2 + 1] = secondScore
+  }
+
+  const varianceExplainedRatio =
+    totalVariance > 0
+      ? Math.min(
+          1,
+          Math.max(0, (first.eigenvalue + second.eigenvalue) / totalVariance),
+        )
+      : 1
+
+  return { coordinates, varianceExplainedRatio }
+}
+
+export const runPCA = (job: LayoutJobV1): LayoutResult => {
+  if (job.count === 0)
+    return {
+      type: 'complete',
+      jobId: job.jobId,
+      coordinates: new Float32Array(),
+      quality: { kind: 'unknown', reason: 'insufficient-points' },
+    }
+  if (job.count === 1)
+    return {
+      type: 'complete',
+      jobId: job.jobId,
+      coordinates: new Float32Array([0, 0]),
+      quality: { kind: 'unknown', reason: 'insufficient-points' },
+    }
+  const vectors =
+    job.metric === 'cosine'
+      ? normalizeCosineVectors(job.vectors!, job.count)
+      : job.vectors!
+  const { coordinates } = projectPCA(vectors, job.count, job.dimensions!)
+  const qualityCount = Math.min(job.count, QUALITY_SAMPLE_LIMIT)
+  const qualityK = Math.min(
+    job.parameters.nNeighbors ?? DEFAULT_UMAP_NEIGHBORS,
+    qualityCount - 1,
+  )
+  return {
+    type: 'complete',
+    jobId: job.jobId,
+    coordinates,
+    quality: measureBoundedNeighborhoodPreservation({
+      vectors: vectors.slice(0, qualityCount * job.dimensions!),
+      coordinates: coordinates.slice(0, qualityCount * 2),
+      count: qualityCount,
+      dimensions: job.dimensions!,
+      metric: job.metric === 'ip' ? 'ip' : 'l2',
+      k: qualityK,
+    }),
+  }
+}
+
 export const runLayout = (job: LayoutJobV1): LayoutResult => {
-  if (job.algorithm !== 'umap')
-    return { type: 'unsupported', algorithm: job.algorithm }
+  if (job.algorithm === 'tsne')
+    return { type: 'unsupported', algorithm: 'tsne' }
   const validation = validateLayoutJob(job)
   if (!validation.valid) return { type: 'invalid', reason: validation.reason }
+  if (job.algorithm === 'pca') return runPCA(job)
   if (job.count === 0)
     return {
       type: 'complete',

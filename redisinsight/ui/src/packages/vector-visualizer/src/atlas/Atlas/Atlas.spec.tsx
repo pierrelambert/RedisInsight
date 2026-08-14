@@ -83,8 +83,12 @@ describe('Atlas', () => {
   it('keeps the canvas mounted through context loss and restores a visible status', () => {
     renderComponent()
 
-    expect(screen.getByText('UMAP 1 · derived coordinate')).toBeVisible()
-    expect(screen.getByText('UMAP 2 · derived coordinate')).toBeVisible()
+    expect(
+      screen.queryByText('UMAP 1 · derived coordinate'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('UMAP 2 · derived coordinate'),
+    ).not.toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
     act(() => mockCallbacks?.onContextLost())
@@ -236,5 +240,41 @@ describe('Atlas', () => {
 
     expect(mockSetDensityGrid).toHaveBeenCalledWith(grid, 4)
     expect(mockSetDensityVisible).toHaveBeenCalledWith(true)
+  })
+
+  it('keeps the renderer instance when parent callbacks change so density survives tab rerenders', () => {
+    const Renderer = require('../../renderer/AtlasRenderer').AtlasRenderer
+    Renderer.mockClear()
+    const grid = new Float32Array(16)
+    const firstSelectionChange = jest.fn()
+    const secondSelectionChange = jest.fn()
+    const props = {
+      coordinates: new Float32Array([0, 0, 1, 1]),
+      sampleIds: ['a', 'b'],
+      provenance,
+      showDensity: true,
+      densityGrid: grid,
+      densityGridSize: 4,
+    }
+
+    const { rerender } = render(
+      <ThemeProvider>
+        <Atlas {...props} onSelectionChange={firstSelectionChange} />
+      </ThemeProvider>,
+    )
+    expect(Renderer).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <ThemeProvider>
+        <Atlas {...props} onSelectionChange={secondSelectionChange} />
+      </ThemeProvider>,
+    )
+
+    expect(Renderer).toHaveBeenCalledTimes(1)
+    expect(mockDestroy).not.toHaveBeenCalled()
+
+    act(() => mockCallbacks?.onSelect(['b']))
+    expect(firstSelectionChange).not.toHaveBeenCalled()
+    expect(secondSelectionChange).toHaveBeenCalledWith(['b'])
   })
 })

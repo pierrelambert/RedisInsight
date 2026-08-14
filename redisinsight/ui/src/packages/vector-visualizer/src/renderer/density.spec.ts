@@ -11,12 +11,13 @@ const makeCoordinates = (points: [number, number][]): Float32Array => {
 
 describe('recommendGridSize', () => {
   it.each([
-    [0, 32],
-    [100, 32],
-    [499, 32],
+    [0, 64],
+    [100, 64],
+    [499, 64],
     [500, 64],
     [4999, 64],
-    [5000, 128],
+    [5000, 64],
+    [5001, 128],
     [100_000, 128],
   ] as const)('returns %i → %i', (count, expected) => {
     expect(recommendGridSize(count)).toBe(expected)
@@ -83,10 +84,8 @@ describe('computeDensityGrid', () => {
     const gridSize = 32
     const grid = computeDensityGrid(coords, 4, gridSize, 0.05)
 
-    const nearFirstCluster =
-      grid[Math.floor(0.2 * gridSize) * gridSize + Math.floor(0.2 * gridSize)]
-    const nearSecondCluster =
-      grid[Math.floor(0.8 * gridSize) * gridSize + Math.floor(0.8 * gridSize)]
+    const nearFirstCluster = grid[0]
+    const nearSecondCluster = grid[grid.length - 1]
     const midpoint =
       grid[Math.floor(0.5 * gridSize) * gridSize + Math.floor(0.5 * gridSize)]
 
@@ -105,5 +104,24 @@ describe('computeDensityGrid', () => {
     const wideNonZero = [...wideGrid].filter((v) => v > 0.01).length
 
     expect(wideNonZero).toBeGreaterThan(narrowNonZero)
+  })
+
+  it('uses a circular cutoff instead of filling a square kernel box', () => {
+    const coords = makeCoordinates([[0.5, 0.5]])
+    const gridSize = 32
+    const grid = computeDensityGrid(coords, 1, gridSize, 0.1)
+    const center = Math.floor(0.5 * gridSize)
+    const offset = Math.ceil(0.27 * gridSize)
+
+    const horizontal =
+      grid[center * gridSize + Math.min(gridSize - 1, center + offset)]
+    const diagonal =
+      grid[
+        Math.min(gridSize - 1, center + offset) * gridSize +
+          Math.min(gridSize - 1, center + offset)
+      ]
+
+    expect(horizontal).toBeGreaterThan(0)
+    expect(diagonal).toBe(0)
   })
 })

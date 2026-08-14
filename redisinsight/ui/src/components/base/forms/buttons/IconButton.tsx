@@ -9,16 +9,15 @@ export type IconType = ButtonProps['icon']
 export type IconButtonProps = Omit<ButtonProps, 'icon'> & {
   icon: IconType | string
 }
-export const IconButton = ({
-  icon,
-  size: _size,
-  ...props
-}: IconButtonProps) => {
-  let buttonIcon: IconType
-  if (typeof icon === 'string') {
-    buttonIcon = Icons[icon as AllIconsType]
-  } else {
-    buttonIcon = icon
-  }
-  return <RedisUiIconButton icon={buttonIcon} {...props} />
-}
+
+export const IconButton = React.forwardRef<
+  React.ElementRef<typeof RedisUiIconButton>,
+  IconButtonProps
+>(({ icon, size: _size, ...props }, ref) => {
+  const buttonIcon =
+    typeof icon === 'string' ? Icons[icon as AllIconsType] : icon
+
+  return <RedisUiIconButton ref={ref} icon={buttonIcon} {...props} />
+})
+
+IconButton.displayName = 'IconButton'

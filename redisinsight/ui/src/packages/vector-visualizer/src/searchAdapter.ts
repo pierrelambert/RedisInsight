@@ -148,6 +148,9 @@ export const planSearchNeighbors = ({
     'SORTBY',
     '__vv_metric',
     'ASC',
+    'LIMIT',
+    '0',
+    String(limit),
     'RETURN',
     '1',
     '__vv_metric',
@@ -312,6 +315,9 @@ export const planProfileSearchNeighbors = ({
     'SORTBY',
     '__vv_metric',
     'ASC',
+    'LIMIT',
+    '0',
+    String(limit),
     'RETURN',
     '1',
     '__vv_metric',
@@ -326,6 +332,12 @@ export interface SearchVectorField {
   metric?: VectorMetric
   algorithm?: string
   dataType?: string
+  /** HNSW M graph connectivity. */
+  m?: number
+  /** HNSW EF_CONSTRUCTION build-time graph quality. */
+  efConstruction?: number
+  /** HNSW EF_RUNTIME query-time default. */
+  efRuntime?: number
   /** SVS-VAMANA compression type (LVQ8, LVQ4, LVQ4x4, LVQ4x8, LeanVec4x8, LeanVec8x8). */
   compression?: string
   /** SVS-VAMANA GRAPH_MAX_DEGREE. */
@@ -562,6 +574,9 @@ export const parseSearchInfo = (reply: unknown) => {
               : undefined,
           algorithm: asText(recordValue(data, 'algorithm'))?.toLowerCase(),
           dataType: asText(recordValue(data, 'data_type')),
+          m: asNumber(recordValue(data, 'm')),
+          efConstruction: asNumber(recordValue(data, 'ef_construction')),
+          efRuntime: asNumber(recordValue(data, 'ef_runtime')),
           compression:
             asText(recordValue(data, 'compression'))?.toUpperCase() ??
             undefined,
@@ -860,7 +875,8 @@ export const parseAggregateResponse = (reply: unknown): AggregateResult => {
       }
       return group
     })
-    const totalGroups = asNumber(recordValue(resp3, 'total_results')) ?? groups.length
+    const totalGroups =
+      asNumber(recordValue(resp3, 'total_results')) ?? groups.length
     return { groups, totalGroups }
   }
 
@@ -906,18 +922,17 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
     const knnArgs: string[] = ['K', String(input.limit)]
     if (input.efRuntime !== undefined)
       knnArgs.push('EF_RUNTIME', String(input.efRuntime))
-    if (input.searchWindowSize !== undefined)
-      knnArgs.push('SEARCH_WINDOW_SIZE', String(input.searchWindowSize))
     if (input.shardKRatio !== undefined)
       knnArgs.push('SHARD_K_RATIO', String(input.shardKRatio))
+    knnArgs.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
     args.push('KNN', String(knnArgs.length), ...knnArgs)
   } else {
     const rangeArgs: string[] = ['RADIUS', String(input.radius ?? 0.5)]
     if (input.epsilon !== undefined)
       rangeArgs.push('EPSILON', String(input.epsilon))
+    rangeArgs.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
     args.push('RANGE', String(rangeArgs.length), ...rangeArgs)
   }
-  args.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
 
   // COMBINE clause
   if (input.fusionMethod === 'rrf') {
@@ -926,6 +941,7 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
       rrfArgs.push('CONSTANT', String(input.rrfConstant))
     if (input.rrfWindow !== undefined)
       rrfArgs.push('WINDOW', String(input.rrfWindow))
+    rrfArgs.push('YIELD_SCORE_AS', HYBRID_SCORE_FIELD)
     args.push('COMBINE', 'RRF', String(rrfArgs.length), ...rrfArgs)
   } else {
     const linearArgs: string[] = []
@@ -933,9 +949,9 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
       linearArgs.push('ALPHA', String(input.linearAlpha))
     if (input.linearBeta !== undefined)
       linearArgs.push('BETA', String(input.linearBeta))
+    linearArgs.push('YIELD_SCORE_AS', HYBRID_SCORE_FIELD)
     args.push('COMBINE', 'LINEAR', String(linearArgs.length), ...linearArgs)
   }
-  args.push('YIELD_SCORE_AS', HYBRID_SCORE_FIELD)
 
   // FILTER
   if (input.filter) args.push('FILTER', input.filter)
@@ -949,7 +965,7 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
   }
 
   // SORTBY
-  args.push('SORTBY', HYBRID_SCORE_FIELD, 'ASC')
+  args.push('SORTBY', '2', HYBRID_SCORE_FIELD, 'ASC')
 
   // LIMIT
   args.push('LIMIT', '0', String(input.limit))

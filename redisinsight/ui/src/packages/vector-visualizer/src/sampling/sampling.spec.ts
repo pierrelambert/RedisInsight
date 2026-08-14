@@ -15,19 +15,26 @@ describe('atlas sampling', () => {
     )
   })
   it('bounds jobs and reports freshness changes', () => {
-    expect(
-      validateLayoutJob({
-        version: 1,
-        jobId: 'a',
-        algorithm: 'umap',
-        metric: 'cosine',
-        count: 2,
-        dimensions: 2,
-        vectors: new Float32Array([1, 0, 0, 1]),
-        seed: 1,
-        parameters: {},
-      }),
-    ).toEqual({ valid: true })
+    const layoutJob = {
+      version: 1,
+      jobId: 'a',
+      algorithm: 'umap',
+      metric: 'cosine',
+      count: 2,
+      dimensions: 2,
+      vectors: new Float32Array([1, 0, 0, 1]),
+      seed: 1,
+      parameters: {},
+    } as const
+
+    expect(validateLayoutJob(layoutJob)).toEqual({ valid: true })
+    expect(validateLayoutJob({ ...layoutJob, algorithm: 'pca' })).toEqual({
+      valid: true,
+    })
+    expect(validateLayoutJob({ ...layoutJob, algorithm: 'tsne' })).toEqual({
+      valid: false,
+      reason: 'unsupported-algorithm',
+    })
     expect(sampleFreshness(10, 11)).toBe('changed-while-sampled')
   })
 

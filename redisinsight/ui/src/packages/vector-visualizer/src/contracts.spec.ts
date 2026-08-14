@@ -1,4 +1,5 @@
 import {
+  asNumber,
   asText,
   createResultGuard,
   createVectorMemoryStore,
@@ -37,6 +38,25 @@ import {
 describe('shared vector visualizer contracts', () => {
   it('decodes byte-backed text across the browser and Node realms', () => {
     expect(asText(new TextEncoder().encode('member:1'))).toBe('member:1')
+  })
+
+  it('coerces RedisInsight raw integer formatter objects in Search replies', () => {
+    const taggedInteger = { type: 'integer', value: '2' }
+
+    expect(asText(taggedInteger)).toBe('2')
+    expect(asNumber(taggedInteger)).toBe(2)
+    expect(
+      parseSearchNeighbors(
+        [
+          taggedInteger,
+          'doc:1',
+          ['__vv_metric', '0.25'],
+          'doc:2',
+          ['__vv_metric', '0.5'],
+        ],
+        { metric: 'cosine', algorithm: 'hnsw' },
+      ),
+    ).toHaveLength(2)
   })
 
   it('keeps source-specific filters and binary PARAMS tokenized in a read-only Search KNN plan', () => {

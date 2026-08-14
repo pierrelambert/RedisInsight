@@ -1,10 +1,15 @@
 import React from 'react'
 import styled from 'styled-components'
 
+import { Col } from 'uiSrc/components/base/layout/flex'
+import { Text, Title } from 'uiSrc/components/base/text'
+
 export type HealthTileSeverity = 'success' | 'notice' | 'attention' | 'neutral'
 
 export const EvidencePanel = styled.section`
-  padding: ${({ theme }) => theme.core.space.space150};
+  flex: 1;
+  min-inline-size: 0;
+  padding: ${({ theme }) => theme.core.space.space075};
   border: ${({ theme }) => theme.core.space.space010} solid
     ${({ theme }) => theme.semantic.color.border.neutral500};
   border-radius: ${({ theme }) => theme.components.card.borderRadius};
@@ -14,13 +19,23 @@ export const EvidencePanel = styled.section`
 >
 
 export const MetricGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: ${({ theme }) => theme.core.space.space100};
+  display: flex;
+  gap: ${({ theme }) => theme.core.space.space075};
+  min-inline-size: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
 `
 
 export const MetricTile = styled.article<{ $severity: HealthTileSeverity }>`
-  padding: ${({ theme }) => theme.core.space.space100};
+  flex: 0 0
+    ${({ theme }) =>
+      `calc(${theme.core.space.space800} + ${theme.core.space.space600})`};
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.core.space.space025};
+  min-inline-size: 0;
+  padding: ${({ theme }) => theme.core.space.space050};
   border: ${({ theme }) => theme.core.space.space010} solid
     ${({ $severity, theme }) =>
       $severity === 'success'
@@ -44,3 +59,32 @@ export const MetricTile = styled.article<{ $severity: HealthTileSeverity }>`
     React.HTMLAttributes<HTMLElement> & { $severity: HealthTileSeverity }
   >
 >
+
+export const MetricTileHeader = styled(Col)`
+  min-inline-size: 0;
+`
+
+export const MetricLabel = styled(Text)`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const MetricValue = styled(Title)`
+  overflow-wrap: anywhere;
+  line-height: ${({ theme }) => theme.core.space.space200};
+`
+
+export const MetricStatus = styled(Text)`
+  overflow-wrap: anywhere;
+`
+
+export const MetricFormula = styled.details`
+  min-inline-size: 0;
+
+  > summary {
+    cursor: pointer;
+    color: ${({ theme }) => theme.semantic.color.text.informative600};
+    font-size: ${({ theme }) => theme.core.space.space125};
+  }
+`
