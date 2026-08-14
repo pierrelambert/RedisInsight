@@ -1,5 +1,11 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { FixedSizeList, type ListChildComponentProps } from 'react-window'
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import styled from 'styled-components'
 
 import { Button } from 'uiSrc/components/base/forms/buttons'
@@ -14,14 +20,20 @@ import {
 } from 'uiSrc/slices/cli/cli-settings'
 import { useAppDispatch, useAppSelector } from 'uiSrc/slices/hooks'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
-import { parseVlinksTopology } from 'uiSrc/packages/vector-visualizer/src/advanced/advanced'
+import {
+  parseSearchExecutionEvidence,
+  parseVlinksTopology,
+} from 'uiSrc/packages/vector-visualizer/src/advanced/advanced'
 import {
   Advanced,
   Atlas,
+  CompareAtlas,
   CompareTune,
   DuplicateExplorer,
   OutlierExplorer,
   QueryLab,
+  SelectionTable,
+  Tune,
   XRay,
 } from 'uiSrc/packages/vector-visualizer/src/components'
 import type { AtlasLegendEntry } from 'uiSrc/packages/vector-visualizer/src/components'
@@ -52,8 +64,19 @@ import type {
   CompareTuneStatus,
   QueryLabProps,
 } from 'uiSrc/packages/vector-visualizer/src/types'
-import type { VisualizerStatus } from 'uiSrc/packages/vector-visualizer/src/contracts'
+import type {
+  LayoutJobV1,
+  VectorMetric,
+  VisualizerStatus,
+} from 'uiSrc/packages/vector-visualizer/src/contracts'
 import type { SelectionRow } from 'uiSrc/packages/vector-visualizer/src/selection/selection'
+import type { SensitivityResult } from 'uiSrc/packages/vector-visualizer/src/tune/Tune'
+import {
+  recommendSearchIndexTuning,
+  recommendVectorSetTuning,
+  type TuneRecommendation,
+} from 'uiSrc/packages/vector-visualizer/src/tune/recommendations'
+import { planSensitivityRuns } from 'uiSrc/packages/vector-visualizer/src/tune/sensitivity'
 import {
   LayoutWorkerClient,
   type BoundedMetricEvidenceResult,
@@ -69,7 +92,10 @@ import {
   type NativeVisualizerWorkflow,
   type VectorDataSourceRef,
 } from './nativeHandoff'
-import { createNativeReadOnlyExecutor } from './nativeExecution'
+import {
+  createNativeReadOnlyExecutor,
+  serializeNativeArgument,
+} from './nativeExecution'
 import { runNativeVectorSetBenchmark } from './nativeBenchmark'
 import { buildNativeManifestProvenance } from './nativeManifest'
 import { buildNativeQuerySourceSample } from './nativeQueryEvidence'
@@ -78,6 +104,12 @@ import {
   orchestrateNativeQuery,
   type NativeSampleResult,
 } from './nativeOrchestration'
+import {
+  parseNativeDocumentExport,
+  planSearchDocumentExport,
+  planVectorSetDocumentExport,
+  type NativeDocumentExport,
+} from './nativeDocumentExport'
 import {
   buildNativeDriftEvidence,
   buildNativeXRayFacts,
@@ -96,12 +128,65 @@ const DBSCAN_COLOR_BY_VALUE = '__dbscan_clusters__'
 const DBSCAN_MIN_POINTS = 5
 const DBSCAN_K = 5
 
+const vectorToRedisBlobArgument = (vector: Float32Array): Uint8Array =>
+  new Uint8Array(vector.buffer, vector.byteOffset, vector.byteLength)
+
+const quoteCliToken = (value: string): string => JSON.stringify(value)
+
+const buildCopyableQuery = (
+  source: VectorDataSourceRef,
+  anchorVector: Float32Array,
+  limit: number,
+  filter?: string,
+): string => {
+  if (source.kind === 'search-index') {
+    const query = `${filter ? `(${filter})` : '*'}=>[KNN ${limit} @${source.vectorField} $vv_anchor AS __vv_metric]`
+    return [
+      'FT.PROFILE',
+      quoteCliToken(source.index),
+      'SEARCH',
+      'LIMITED',
+      'QUERY',
+      quoteCliToken(query),
+      'PARAMS',
+      '2',
+      'vv_anchor',
+      serializeNativeArgument(vectorToRedisBlobArgument(anchorVector)),
+      'SORTBY',
+      '__vv_metric',
+      'ASC',
+      'RETURN',
+      '1',
+      '__vv_metric',
+      'DIALECT',
+      '2',
+    ].join(' ')
+  }
+
+  return [
+    'VSIM',
+    quoteCliToken(new TextDecoder().decode(source.key)),
+    'VALUES',
+    String(anchorVector.length),
+    ...Array.from(anchorVector, String),
+    'COUNT',
+    String(limit),
+    'WITHSCORES',
+  ].join(' ')
+}
+
 const DEFAULT_SAMPLE_BUDGET = 2_000
 const MIN_SAMPLE_BUDGET = 500
 const MAX_SAMPLE_BUDGET = 20_000
 const MAX_HEALTH_SAMPLE_SIZE = 200
+const MAX_SENSITIVITY_SAMPLE_SIZE = 500
 const UMAP_SEED = 42
-const NATIVE_QUERY_LIMIT = 50
+const DEFAULT_NEIGHBOR_LIMIT = 10
+const MIN_NEIGHBOR_LIMIT = 5
+const MAX_NEIGHBOR_LIMIT = 30
+const NEIGHBOR_LIMIT_STEP = 5
+const NEIGHBOR_LIMIT_RERUN_DEBOUNCE_MS = 300
+const SELF_MATCH_BUFFER = 1
 const MIN_CLUSTER_LABEL_COUNT = 2
 const DEFAULT_CLUSTER_LABEL_LIMIT = 'top-12'
 const CLUSTER_LABEL_LIMIT_OPTIONS = [
@@ -136,6 +221,9 @@ const clusterLabelLimitCount = (limit: ClusterLabelLimit) => {
 
 const isClusterLabelLimit = (value: string): value is ClusterLabelLimit =>
   CLUSTER_LABEL_LIMIT_OPTIONS.some((option) => option.value === value)
+
+const redisQueryLimitForVisibleNeighbors = (visibleNeighborLimit: number) =>
+  visibleNeighborLimit + SELF_MATCH_BUFFER
 
 const spreadClusterLabels = (labels: AtlasClusterLabel[]) => {
   const placed: AtlasClusterLabel[] = []
@@ -175,15 +263,6 @@ const NativeHost = styled.main`
   gap: ${({ theme }) => theme.core.space.space100};
 ` as unknown as React.FC<React.HTMLAttributes<HTMLElement>>
 
-const TruthBanner = styled(Text)`
-  flex: 0 0 auto;
-  padding: ${({ theme }) => theme.core.space.space100};
-  border: ${({ theme }) => theme.core.space.space010} solid
-    ${({ theme }) => theme.semantic.color.border.neutral500};
-  background-color: ${({ theme }) =>
-    theme.semantic.color.background.neutral100};
-`
-
 const NativeHeader = styled(Row)`
   flex: 0 0 auto;
   min-inline-size: 0;
@@ -198,6 +277,61 @@ const ModeHeader = styled(Row)`
     ${({ theme }) => theme.semantic.color.border.neutral500};
   background-color: ${({ theme }) =>
     theme.semantic.color.background.neutral100};
+`
+
+const AdditionalWorkflowPanelBase = styled.details`
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+  inline-size: 100%;
+  max-block-size: 100%;
+  overflow: hidden;
+  border: ${({ theme }) => theme.core.space.space010} solid
+    ${({ theme }) => theme.semantic.color.border.neutral500};
+  background-color: ${({ theme }) =>
+    theme.semantic.color.background.neutral100};
+
+  &:not([open]) {
+    max-block-size: none;
+    overflow: hidden;
+  }
+
+  &[open] {
+    block-size: 100%;
+    max-block-size: min(
+      42vh,
+      ${({ theme }) => `calc(${theme.core.space.space800} * 7)`}
+    );
+  }
+
+  > summary {
+    flex: 0 0 auto;
+    padding: ${({ theme }) => theme.core.space.space050}
+      ${({ theme }) => theme.core.space.space100};
+    cursor: pointer;
+  }
+`
+
+const AdditionalWorkflowPanel =
+  AdditionalWorkflowPanelBase as React.ComponentType<
+    React.PropsWithChildren<React.DetailsHTMLAttributes<HTMLDetailsElement>>
+  >
+
+const AdditionalWorkflowBody = styled(Col).attrs({ gap: 's' })`
+  flex: 1 1 0;
+  min-block-size: 0;
+  min-inline-size: 0;
+  max-block-size: min(
+    36vh,
+    ${({ theme }) => `calc(${theme.core.space.space800} * 6)`}
+  );
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 ${({ theme }) => theme.core.space.space100}
+    ${({ theme }) => theme.core.space.space100};
+  scrollbar-gutter: stable;
 `
 
 const workflows: NativeVisualizerWorkflow[] = [
@@ -296,17 +430,15 @@ const SampleSelection = ({
   description?: string
 }) => {
   const { t } = useTranslation()
-  const { theme } = useContext(PluginsThemeContext)
-  const rowHeightToken = theme.core.space.space400
-  const rootFontSize = Number.parseFloat(
-    window.getComputedStyle(document.documentElement).fontSize,
-  )
-  const rowHeight =
-    Number.parseFloat(rowHeightToken) *
-    (rowHeightToken.endsWith('rem') && Number.isFinite(rootFontSize)
-      ? rootFontSize
-      : 1)
-  const rowData = { sampleIds, selectedIds, onSelectedIdsChange }
+  const rows: SelectionRow[] = sampleIds.map((id, index) => ({
+    id,
+    metric: 'score',
+    plotted: true,
+    rank: index + 1,
+    selected: selectedIds.includes(id),
+    value: Number.NaN,
+  }))
+
   return (
     <Col gap="m">
       <Text
@@ -314,51 +446,19 @@ const SampleSelection = ({
         aria-label={t('vectorVisualizer.selection.selectedIds')}
         role="status"
       >
-        {t('vectorVisualizer.selection.selectedIds')}:{' '}
-        {selectedIds.length
-          ? selectedIds.join(', ')
-          : t('vectorVisualizer.common.none')}
+        {t('vectorVisualizer.page.selectedCount', {
+          count: selectedIds.length,
+        })}
       </Text>
       <Text color="subdued">
         {description ?? t('vectorVisualizer.selection.idsOnly')}
       </Text>
-      <div
-        aria-label={t('vectorVisualizer.selection.virtualizedSampledIds')}
-        aria-rowcount={sampleIds.length}
-        role="list"
-      >
-        <FixedSizeList
-          height={Math.min(sampleIds.length, 7) * rowHeight}
-          itemCount={sampleIds.length}
-          itemData={rowData}
-          itemSize={rowHeight}
-          width="100%"
-        >
-          {({
-            index,
-            style,
-            data,
-          }: ListChildComponentProps<typeof rowData>) => {
-            const id = data.sampleIds[index]
-            const selected = data.selectedIds.includes(id)
-            return (
-              <Row align="center" gap="s" role="listitem" style={style}>
-                <Text component="span" title={id}>
-                  {id}
-                </Text>
-                <Button
-                  aria-label={t('vectorVisualizer.selection.selectId', { id })}
-                  aria-pressed={selected}
-                  size="s"
-                  onClick={() => data.onSelectedIdsChange([id])}
-                >
-                  {t('vectorVisualizer.selection.inspectId')}
-                </Button>
-              </Row>
-            )
-          }}
-        </FixedSizeList>
-      </div>
+      <SelectionTable
+        focusedId={selectedIds[0]}
+        rows={rows}
+        variant="compact-id"
+        onFocus={(id) => onSelectedIdsChange([id])}
+      />
     </Col>
   )
 }
@@ -377,6 +477,8 @@ const Explore = ({
   dbscanResult: dbscan,
   showMapLabels: mapLabelsVisible,
   mode = 'atlas',
+  projectionAlgorithm,
+  comparePanel,
 }: {
   sample?: NativePageSample
   selectedIds: string[]
@@ -391,6 +493,8 @@ const Explore = ({
   dbscanResult: DBSCANResult | null
   showMapLabels: boolean
   mode?: 'atlas' | 'selection'
+  projectionAlgorithm: 'umap' | 'pca'
+  comparePanel?: { coordinates: Float32Array; quality: LayoutQuality }
 }) => {
   const { t } = useTranslation()
   const { theme } = useContext(PluginsThemeContext)
@@ -429,14 +533,31 @@ const Explore = ({
   const recordsById = new Map(
     result.records.map((record) => [record.id, record]),
   )
+  const clusterDominantMetadataField = isDbscanColorBy
+    ? Array.from(
+        new Set([
+          ...(result.availableMetadataFields ?? []),
+          ...result.records.flatMap(({ metadata }) =>
+            metadata ? Object.keys(metadata) : [],
+          ),
+        ]),
+      ).find((field) =>
+        result.records.some(({ metadata }) => {
+          const value = metadata?.[field]
+          return value !== undefined && value !== ''
+        }),
+      )
+    : metadataField
 
   const clusterDominant = new Map<number, string>()
-  if (isDbscanColorBy && dbscan && metadataField) {
+  if (isDbscanColorBy && dbscan && clusterDominantMetadataField) {
     const clusterValueCounts = new Map<number, Map<string, number>>()
     for (let i = 0; i < result.ids.length; i += 1) {
       const cid = dbscan.assignments[i]
       if (cid < 0) continue
-      const val = recordsById.get(result.ids[i])?.metadata?.[metadataField]
+      const val = recordsById.get(result.ids[i])?.metadata?.[
+        clusterDominantMetadataField
+      ]
       if (val === undefined || val === '') continue
       const sv = String(val)
       const vc = clusterValueCounts.get(cid) ?? new Map<string, number>()
@@ -617,6 +738,66 @@ const Explore = ({
     )
   }
 
+  const provenance = {
+    sourceCount: result.sourceCount,
+    sampleCount: result.sampleCount,
+    method: projectionAlgorithm === 'umap' ? 'UMAP' : 'PCA',
+    seed: UMAP_SEED,
+    freshness:
+      result.freshness === 'changed-while-sampled'
+        ? ('changed-while-sampled' as const)
+        : ('fresh' as const),
+    exactness: 'unknown' as const,
+    quality: sample.quality,
+  }
+
+  if (comparePanel && mode !== 'selection') {
+    const currentMethod = projectionAlgorithm === 'umap' ? 'UMAP' : 'PCA'
+    const alternateMethod = projectionAlgorithm === 'umap' ? 'PCA' : 'UMAP'
+    return (
+      <Col gap="l">
+        <CompareAtlas
+          left={{
+            coordinates: sample.coordinates,
+            provenance: { ...provenance, method: currentMethod },
+            title: t('vectorVisualizer.atlas.compareLeft', {
+              method: currentMethod,
+              quality:
+                qualitySummary(sample.quality) ??
+                t('vectorVisualizer.common.unknown'),
+            }),
+          }}
+          right={{
+            coordinates: comparePanel.coordinates,
+            provenance: {
+              ...provenance,
+              method: alternateMethod,
+              quality: comparePanel.quality,
+            },
+            title: t('vectorVisualizer.atlas.compareRight', {
+              method: alternateMethod,
+              quality:
+                qualitySummary(comparePanel.quality) ??
+                t('vectorVisualizer.common.unknown'),
+            }),
+          }}
+          sampleIds={result.ids}
+          pointColors={pointColors}
+          clusterLabels={clusterLabels}
+          selectedIds={selectedIds}
+          onSelectionChange={onSelectedIdsChange}
+          renderAccessibleSelection={() => (
+            <SampleSelection
+              sampleIds={result.ids}
+              selectedIds={selectedIds}
+              onSelectedIdsChange={onSelectedIdsChange}
+            />
+          )}
+        />
+      </Col>
+    )
+  }
+
   return (
     <Col gap="l">
       <Atlas
@@ -630,16 +811,8 @@ const Explore = ({
         coordinates={sample.coordinates}
         sampleIds={result.ids}
         provenance={{
-          sourceCount: result.sourceCount,
-          sampleCount: result.sampleCount,
-          method: 'UMAP',
-          seed: UMAP_SEED,
-          freshness:
-            result.freshness === 'changed-while-sampled'
-              ? 'changed-while-sampled'
-              : 'fresh',
-          exactness: 'unknown',
-          quality: sample.quality,
+          ...provenance,
+          method: projectionAlgorithm === 'umap' ? 'UMAP' : 'PCA',
         }}
         pointColors={pointColors}
         clusterLabels={clusterLabels}
@@ -664,6 +837,10 @@ const Explore = ({
     </Col>
   )
 }
+
+/** Short display value for compare-projections panel titles; never fabricates unmeasured quality. */
+const qualitySummary = (quality: LayoutQuality) =>
+  quality.kind === 'measured' ? quality.value.toFixed(2) : undefined
 
 const Health = ({
   sample,
@@ -758,24 +935,18 @@ const Health = ({
           {MAX_HEALTH_SAMPLE_SIZE}); the full Atlas is never compared pairwise.
         </Text>
       )}
-      <DuplicateExplorer
-        evidence={duplicateEvidence}
-        onSelectionChange={onSelectedIdsChange}
-        onConfigChange={onDuplicateThresholdChange}
-      />
-      <OutlierExplorer
-        evidence={outlierEvidence}
-        onSelectionChange={onSelectedIdsChange}
-        onConfigChange={onOutlierConfigChange}
-      />
-      {sample && (
-        <SampleSelection
-          sampleIds={records.map(({ id }) => id)}
-          selectedIds={selectedIds}
-          onSelectedIdsChange={onSelectedIdsChange}
-          description={t('vectorVisualizer.health.selectionDescription')}
+      <Row align="start" gap="l" wrap>
+        <DuplicateExplorer
+          evidence={duplicateEvidence}
+          onSelectionChange={onSelectedIdsChange}
+          onConfigChange={onDuplicateThresholdChange}
         />
-      )}
+        <OutlierExplorer
+          evidence={outlierEvidence}
+          onSelectionChange={onSelectedIdsChange}
+          onConfigChange={onOutlierConfigChange}
+        />
+      </Row>
       <Col
         gap="xs"
         aria-label={t('vectorVisualizer.health.selectedRecordInspector')}
@@ -827,6 +998,10 @@ export const VectorVisualizerPage = () => {
   const layoutWorkerPromise = useRef<Promise<LayoutWorkerClient>>()
   const disposed = useRef(false)
   const cliInitializationAttempted = useRef(false)
+  const sampleRef = useRef<NativePageSample>()
+  const projectionAlgorithmRef = useRef<'umap' | 'pca'>('umap')
+  const queryAnchorIdRef = useRef<string>()
+  const runQueryRef = useRef<(anchorId?: string) => Promise<void>>()
   const [workflow, setWorkflow] = useState(
     () => session.getPreferences().workflow,
   )
@@ -835,6 +1010,9 @@ export const VectorVisualizerPage = () => {
   >('atlas')
   const [additionalWorkflowsOpen, setAdditionalWorkflowsOpen] = useState(false)
   const [sampleBudget, setSampleBudget] = useState(DEFAULT_SAMPLE_BUDGET)
+  const [projectionAlgorithm, setProjectionAlgorithm] = useState<
+    'umap' | 'pca'
+  >('umap')
   const [status, setStatus] = useState<NativePageStatus>('ready-not-sampled')
   const [sample, setSample] = useState<NativePageSample>()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -858,6 +1036,8 @@ export const VectorVisualizerPage = () => {
   })
   const [query, setQuery] = useState(emptyQuery)
   const [queryAnchorId, setQueryAnchorId] = useState<string>()
+  const [neighborLimit, setNeighborLimit] = useState(DEFAULT_NEIGHBOR_LIMIT)
+  const neighborLimitRef = useRef(neighborLimit)
   const [queryMode, setQueryMode] = useState<
     'knn' | 'range' | 'hybrid' | 'aggregate'
   >('knn')
@@ -881,6 +1061,10 @@ export const VectorVisualizerPage = () => {
     }>
     totalResults: number
   }>()
+  const [aggregateResult, setAggregateResult] = useState<{
+    groups: Array<Record<string, unknown>>
+    totalGroups: number
+  }>()
   const [hybridPolicy, setHybridPolicy] = useState<
     'AUTO' | 'BATCHES' | 'ADHOC_BF' | undefined
   >()
@@ -898,11 +1082,29 @@ export const VectorVisualizerPage = () => {
   const [compareStatus, setCompareStatus] = useState<
     CompareTuneStatus | undefined
   >('empty')
+  const [sensitivityRuns, setSensitivityRuns] = useState<SensitivityResult[]>(
+    [],
+  )
+  const [selectedK, setSelectedK] = useState<number>()
+  const sensitivityLayoutsRef = useRef(
+    new Map<
+      number,
+      {
+        coordinates: Float32Array
+        quality: LayoutQuality
+      }
+    >(),
+  )
   const [showDensity, setShowDensity] = useState(false)
   const [densityGrid, setDensityGrid] = useState<Float32Array | null>(null)
   const [densityGridSize, setDensityGridSize] = useState(64)
   const [dbscanResult, setDbscanResult] = useState<DBSCANResult | null>(null)
   const [showMapLabels, setShowMapLabels] = useState(false)
+  const [compareProjections, setCompareProjections] = useState(false)
+  const [altCoordinates, setAltCoordinates] = useState<Float32Array | null>(
+    null,
+  )
+  const [altQuality, setAltQuality] = useState<LayoutQuality>()
   const [aggregateGroupByField, setAggregateGroupByField] = useState('')
   const [aggregateReduceFunction, setAggregateReduceFunction] =
     useState('COUNT')
@@ -916,6 +1118,8 @@ export const VectorVisualizerPage = () => {
       | 'unsupported'
     topology: ReturnType<typeof parseVlinksTopology>
   }>({ status: 'ready', topology: { kind: 'unsupported' } })
+
+  sampleRef.current = sample
 
   const statusCopy = useMemo<Record<NativePageStatus, string>>(
     () => ({
@@ -944,6 +1148,20 @@ export const VectorVisualizerPage = () => {
     }),
     [t],
   )
+
+  const getLayoutWorker = useCallback(async () => {
+    if (!layoutWorkerPromise.current) {
+      layoutWorkerPromise.current = import(
+        'uiSrc/packages/vector-visualizer/src/worker/browserWorker'
+      ).then(({ createBrowserLayoutWorker }) => {
+        const client = new LayoutWorkerClient(createBrowserLayoutWorker)
+        layoutWorker.current = client
+        if (disposed.current) client.dispose()
+        return client
+      })
+    }
+    return layoutWorkerPromise.current
+  }, [])
 
   useEffect(() => {
     if (!sample) {
@@ -1001,6 +1219,134 @@ export const VectorVisualizerPage = () => {
     }
   }, [session])
 
+  useEffect(() => {
+    if (projectionAlgorithmRef.current === projectionAlgorithm) return undefined
+    projectionAlgorithmRef.current = projectionAlgorithm
+    const currentSample = sampleRef.current
+    if (!currentSample) return undefined
+
+    let cancelled = false
+    setAltCoordinates(null)
+    setAltQuality(undefined)
+    setStatus('layouting')
+
+    void (async () => {
+      const { ids, dimensions, sampleCount, kind } = currentSample.result
+      const vectors = new Float32Array(sampleCount * dimensions)
+      ids.forEach((id, index) => {
+        const vector = session.getRawVector(id)
+        if (vector) vectors.set(vector, index * dimensions)
+      })
+      const hasVectors = ids.every((id) => session.getRawVector(id))
+      if (!hasVectors) throw new Error('Sample vectors are unavailable')
+
+      const worker = await getLayoutWorker()
+      const layout = await worker.start({
+        version: 1,
+        jobId: `native-reproject-${Date.now()}`,
+        algorithm: projectionAlgorithm,
+        metric: currentSample.layoutMetric,
+        count: sampleCount,
+        dimensions,
+        vectors,
+        seed: UMAP_SEED,
+        parameters: { nNeighbors: 15 },
+      })
+      if (cancelled) return
+      if (layout.type !== 'complete') {
+        setStatus('unsupported')
+        return
+      }
+      setSample((latest) =>
+        latest
+          ? {
+              ...latest,
+              coordinates: layout.coordinates,
+              quality: layout.quality,
+            }
+          : latest,
+      )
+      setStatus(kind === 'partial' ? 'partial' : 'ready')
+    })().catch(() => {
+      if (!cancelled) setStatus('recoverable-error')
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [getLayoutWorker, projectionAlgorithm, session])
+
+  useEffect(() => {
+    if (!compareProjections || !sample) {
+      setAltCoordinates(null)
+      setAltQuality(undefined)
+      return undefined
+    }
+
+    let cancelled = false
+    const altAlgorithm = projectionAlgorithm === 'umap' ? 'pca' : 'umap'
+    const { ids, dimensions, sampleCount } = sample.result
+
+    void (async () => {
+      const vectors = new Float32Array(sampleCount * dimensions)
+      ids.forEach((id, index) => {
+        const vector = session.getRawVector(id)
+        if (vector) vectors.set(vector, index * dimensions)
+      })
+      const hasVectors = ids.every((id) => session.getRawVector(id))
+      if (!hasVectors) throw new Error('Sample vectors are unavailable')
+
+      const worker = await getLayoutWorker()
+      const layout = await worker.start({
+        version: 1,
+        jobId: `native-compare-${Date.now()}`,
+        algorithm: altAlgorithm,
+        metric: sample.layoutMetric,
+        count: sampleCount,
+        dimensions,
+        vectors,
+        seed: UMAP_SEED,
+        parameters: { nNeighbors: 15 },
+      })
+      if (cancelled) return
+      if (layout.type !== 'complete') {
+        setAltCoordinates(null)
+        setAltQuality(undefined)
+        return
+      }
+      setAltCoordinates(layout.coordinates)
+      setAltQuality(layout.quality)
+    })().catch(() => {
+      if (!cancelled) {
+        setAltCoordinates(null)
+        setAltQuality(undefined)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    compareProjections,
+    getLayoutWorker,
+    projectionAlgorithm,
+    sample,
+    session,
+  ])
+
+  queryAnchorIdRef.current = queryAnchorId
+  useEffect(() => {
+    if (neighborLimitRef.current === neighborLimit) return undefined
+    neighborLimitRef.current = neighborLimit
+    const anchorId = queryAnchorIdRef.current
+    if (!anchorId || !runQueryRef.current) return undefined
+    const timer = window.setTimeout(() => {
+      const currentAnchorId = queryAnchorIdRef.current
+      if (currentAnchorId) void runQueryRef.current?.(currentAnchorId)
+    }, NEIGHBOR_LIMIT_RERUN_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [neighborLimit])
+
   if (!source) {
     return (
       <Col gap="m" data-testid="vector-visualizer-source-missing">
@@ -1013,6 +1359,25 @@ export const VectorVisualizerPage = () => {
   }
 
   const sourceKind = source.kind
+  const tuneConfig = sample
+    ? {
+        count: sample.result.sourceCount,
+        dimensions: sample.result.dimensions,
+        ...(sample.result.metric === 'unknown'
+          ? {}
+          : { metric: sample.result.metric as VectorMetric }),
+        algorithm: sample.result.algorithm,
+        m: sample.result.m,
+        efConstruction: sample.result.efConstruction,
+        efRuntime: sample.result.efRuntime,
+      }
+    : undefined
+  const tuneRecommendations: TuneRecommendation[] =
+    sample && tuneConfig
+      ? source.kind === 'vector-set'
+        ? recommendVectorSetTuning(tuneConfig)
+        : recommendSearchIndexTuning(tuneConfig)
+      : []
   const selectWorkflow = (nextWorkflow: NativeVisualizerWorkflow) => {
     session.setPreferences({ workflow: nextWorkflow })
     setWorkflow(nextWorkflow)
@@ -1027,6 +1392,7 @@ export const VectorVisualizerPage = () => {
     setQuery(emptyQuery)
     setQueryAnchorId(undefined)
     setHybridResult(undefined)
+    setAggregateResult(undefined)
     setStatus('cancelled')
   }
   const sampleVectors = async () => {
@@ -1049,6 +1415,7 @@ export const VectorVisualizerPage = () => {
     setQuery(emptyQuery)
     setQueryAnchorId(undefined)
     setHybridResult(undefined)
+    setAggregateResult(undefined)
     setStatus('fetching')
     try {
       const execute = createNativeReadOnlyExecutor({
@@ -1107,17 +1474,7 @@ export const VectorVisualizerPage = () => {
         result.source.kind === 'search-index' && result.metric !== 'unknown'
           ? result.metric
           : 'cosine'
-      if (!layoutWorkerPromise.current) {
-        layoutWorkerPromise.current = import(
-          'uiSrc/packages/vector-visualizer/src/worker/browserWorker'
-        ).then(({ createBrowserLayoutWorker }) => {
-          const client = new LayoutWorkerClient(createBrowserLayoutWorker)
-          layoutWorker.current = client
-          if (disposed.current) client.dispose()
-          return client
-        })
-      }
-      const worker = await layoutWorkerPromise.current
+      const worker = await getLayoutWorker()
       if (!session.accept(work.generation, null).accepted) {
         setStatus('stale')
         return
@@ -1125,7 +1482,7 @@ export const VectorVisualizerPage = () => {
       const layout = await worker.start({
         version: 1,
         jobId: `native-${work.generation}`,
-        algorithm: 'umap',
+        algorithm: projectionAlgorithm,
         metric: layoutMetric,
         count: result.sampleCount,
         dimensions: result.dimensions,
@@ -1190,6 +1547,7 @@ export const VectorVisualizerPage = () => {
       session.cancel()
       setSample(undefined)
       setSelectedIds([])
+      setAggregateResult(undefined)
       setStatus(errorStatus(error))
     }
   }
@@ -1201,6 +1559,7 @@ export const VectorVisualizerPage = () => {
       setQuery({ ...emptyQuery, status: 'unsupported' })
       setQueryAnchorId(undefined)
       setHybridResult(undefined)
+      setAggregateResult(undefined)
       return
     }
     const work = session.beginWork()
@@ -1219,7 +1578,7 @@ export const VectorVisualizerPage = () => {
         sampleIds: sample.result.ids,
         metric: sample.result.metric,
         algorithm: sample.result.algorithm,
-        limit: NATIVE_QUERY_LIMIT,
+        limit: redisQueryLimitForVisibleNeighbors(neighborLimit),
         execute,
         signal: work.signal,
         generation: work.generation,
@@ -1264,6 +1623,10 @@ export const VectorVisualizerPage = () => {
           queryMode === 'aggregate' && aggregateGroupByField
             ? [aggregateGroupByField]
             : undefined,
+        aggregateLoadFields:
+          queryMode === 'aggregate' && aggregateGroupByField
+            ? [aggregateGroupByField]
+            : undefined,
         aggregateReduceOps:
           queryMode === 'aggregate'
             ? [
@@ -1273,9 +1636,8 @@ export const VectorVisualizerPage = () => {
                     aggregateReduceFunction.toLowerCase() === 'count'
                       ? 'count'
                       : `${aggregateReduceFunction.toLowerCase()}_value`,
-                  ...(aggregateReduceFunction !== 'COUNT' &&
-                  aggregateGroupByField
-                    ? { field: aggregateGroupByField }
+                  ...(aggregateReduceFunction !== 'COUNT'
+                    ? { field: '__vv_metric' }
                     : {}),
                 },
               ]
@@ -1290,9 +1652,14 @@ export const VectorVisualizerPage = () => {
           ...emptyQuery,
           status: result.documents.length ? 'ready' : 'empty',
         })
+        setAggregateResult(undefined)
         return
       }
       if (result.kind === 'aggregate-ready') {
+        setAggregateResult({
+          groups: result.groups,
+          totalGroups: result.totalGroups,
+        })
         setQuery({
           ...emptyQuery,
           status: result.groups.length ? 'ready' : 'empty',
@@ -1301,6 +1668,7 @@ export const VectorVisualizerPage = () => {
         return
       }
       setHybridResult(undefined)
+      setAggregateResult(undefined)
       if (result.kind !== 'ready') {
         setQuery({ ...emptyQuery, status: result.kind })
         return
@@ -1321,6 +1689,7 @@ export const VectorVisualizerPage = () => {
           status: 'unsupported',
         })
         setHybridResult(undefined)
+        setAggregateResult(undefined)
         return
       }
       setQuery({
@@ -1330,25 +1699,62 @@ export const VectorVisualizerPage = () => {
             ? 'acl-unavailable'
             : 'recoverable-error',
       })
+      setHybridResult(undefined)
+      setAggregateResult(undefined)
     }
   }
+
+  runQueryRef.current = runQuery
 
   const copyIds = (ids: string[]) => {
     if (!ids.length) return
     void navigator.clipboard?.writeText(ids.join('\n')).catch(() => undefined)
   }
 
-  const exportRows = (rows: SelectionRow[]) => {
-    if (!rows.length) return
-    const payload = JSON.stringify(rows, null, 2)
+  const exportJson = (items: unknown[], filename: string) => {
+    if (!items.length) return
+    const payload = JSON.stringify(items, null, 2)
     const url = URL.createObjectURL(
       new Blob([payload], { type: 'application/json' }),
     )
     const link = document.createElement('a')
     link.href = url
-    link.download = `vector-visualizer-results-${Date.now()}.json`
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const exportDocuments = async (rows: SelectionRow[]) => {
+    if (!rows.length || !sample || !connectedInstance.id) return
+    const execute = createNativeReadOnlyExecutor({
+      instanceId: connectedInstance.id,
+      cliClientUuid: cliSettings.cliClientUuid,
+      post: apiService.post,
+    })
+    const documents = await Promise.all(
+      rows.map(async ({ id }): Promise<NativeDocumentExport> => {
+        if (source.kind === 'search-index') {
+          const storage = sample.result.storage ?? 'hash'
+          const reply = await execute(planSearchDocumentExport({ id, storage }))
+          return parseNativeDocumentExport({
+            id,
+            reply,
+            source,
+            storage,
+          })
+        }
+
+        const member = sample.result.memberArguments?.get(id) ?? id
+        const reply = await execute(
+          planVectorSetDocumentExport({
+            key: source.key,
+            member,
+          }),
+        )
+        return parseNativeDocumentExport({ id, reply, source })
+      }),
+    )
+    exportJson(documents, `vector-visualizer-documents-${Date.now()}.json`)
   }
 
   const runNeighborsForSelected = (id?: string) => {
@@ -1452,7 +1858,7 @@ export const VectorVisualizerPage = () => {
           ? undefined
           : sample.result.freshness,
       projection: {
-        algorithm: 'umap',
+        algorithm: projectionAlgorithm,
         dimensions: 2,
         seed: UMAP_SEED,
         quality:
@@ -1469,6 +1875,82 @@ export const VectorVisualizerPage = () => {
     createLocalManifestStorage(window.localStorage).save(id, manifest)
     setManifests((current) => [...current, manifest])
     setCompareStatus(undefined)
+  }
+
+  const runSensitivity = async () => {
+    if (!sample) return
+    const ids = sample.result.ids.slice(0, MAX_SENSITIVITY_SAMPLE_SIZE)
+    const count = ids.length
+    const { dimensions } = sample.result
+    if (count < 4 || !dimensions) {
+      setSensitivityRuns([])
+      return
+    }
+
+    const work = session.beginWork()
+    setSensitivityRuns([])
+    setSelectedK(undefined)
+    sensitivityLayoutsRef.current.clear()
+
+    try {
+      const vectors = new Float32Array(count * dimensions)
+      ids.forEach((id, index) => {
+        const vector = session.getRawVector(id)
+        if (vector) vectors.set(vector, index * dimensions)
+      })
+      if (!ids.every((id) => session.getRawVector(id))) return
+      const worker = await getLayoutWorker()
+      if (!session.accept(work.generation, null).accepted) return
+      const baseJob: LayoutJobV1 = {
+        version: 1,
+        jobId: `tune-sensitivity-${work.generation}`,
+        algorithm: 'umap',
+        metric: sample.layoutMetric,
+        count,
+        dimensions,
+        vectors,
+        seed: UMAP_SEED,
+        parameters: { nNeighbors: 15 },
+      }
+      const plan = planSensitivityRuns(baseJob)
+      const results: SensitivityResult[] = []
+      for (let index = 0; index < plan.jobs.length; index += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const layout = await worker.start(plan.jobs[index])
+        if (!session.accept(work.generation, layout).accepted) return
+        if (layout.type !== 'complete') continue
+        const nNeighbors = plan.values[index]
+        sensitivityLayoutsRef.current.set(nNeighbors, {
+          coordinates: layout.coordinates,
+          quality: layout.quality,
+        })
+        results.push({
+          nNeighbors,
+          quality:
+            layout.quality.kind === 'measured' ? layout.quality.value : 0,
+          coordinates: layout.coordinates,
+          count,
+        })
+      }
+      setSensitivityRuns(results)
+    } catch {
+      setSensitivityRuns([])
+    }
+  }
+
+  const selectSensitivityK = (k: number) => {
+    setSelectedK(k)
+    const stored = sensitivityLayoutsRef.current.get(k)
+    if (!stored) return
+    setSample((current) =>
+      current
+        ? {
+            ...current,
+            coordinates: stored.coordinates,
+            quality: stored.quality,
+          }
+        : current,
+    )
   }
 
   const runTruthBenchmark = async () => {
@@ -1576,6 +2058,18 @@ export const VectorVisualizerPage = () => {
         densityGridSize={densityGridSize}
         dbscanResult={dbscanResult}
         showMapLabels={showMapLabels}
+        projectionAlgorithm={projectionAlgorithm}
+        comparePanel={
+          compareProjections && altCoordinates
+            ? {
+                coordinates: altCoordinates,
+                quality: altQuality ?? {
+                  kind: 'unknown',
+                  reason: 'not-measured',
+                },
+              }
+            : undefined
+        }
       />
     ) : workflow === 'query-lab' ? (
       <Col gap="m">
@@ -2005,7 +2499,7 @@ export const VectorVisualizerPage = () => {
           }
           topKBoundary={
             query.status === 'ready' || query.status === 'empty'
-              ? NATIVE_QUERY_LIMIT
+              ? neighborLimit
               : undefined
           }
           freshness={
@@ -2018,6 +2512,36 @@ export const VectorVisualizerPage = () => {
           focusedId={selectedIds[0]}
           onSelectionChange={setSelectedIds}
         />
+        {queryMode === 'aggregate' &&
+          aggregateResult &&
+          aggregateResult.groups.length > 0 && (
+            <Col gap="s" aria-label="Aggregate result groups">
+              <Row align="center" justify="between" gap="s">
+                <Title component="h3" size="S">
+                  Aggregate groups
+                </Title>
+                <Text color="subdued" size="XS">
+                  {aggregateResult.groups.length} of{' '}
+                  {aggregateResult.totalGroups} groups
+                </Text>
+              </Row>
+              <Row gap="s" wrap>
+                {aggregateResult.groups.map((group, index) => (
+                  <Col
+                    aria-label={`Aggregate group ${index + 1}`}
+                    gap="xs"
+                    key={`${index}-${JSON.stringify(group)}`}
+                  >
+                    {Object.entries(group).map(([field, value]) => (
+                      <Text key={field} size="S">
+                        {field}: {String(value)}
+                      </Text>
+                    ))}
+                  </Col>
+                ))}
+              </Row>
+            </Col>
+          )}
         {queryMode === 'hybrid' &&
           hybridResult &&
           hybridResult.documents.length > 0 && (
@@ -2040,29 +2564,44 @@ export const VectorVisualizerPage = () => {
     ) : workflow === 'compare-tune' ? (
       !sample ? (
         <NativeExecutionUnavailable workflow={workflowLabels['compare-tune']} />
-      ) : sample.result.metric === 'unknown' ? (
-        <Text role="status">
-          {t('vectorVisualizer.compareTune.metricUnavailable')}
-        </Text>
-      ) : manifests.length < 2 ? (
-        <Col gap="m">
-          <Text role="status">
-            {t('vectorVisualizer.compareTune.needManifests')}
-          </Text>
-          <Button onClick={saveManifest}>
-            {t('vectorVisualizer.compareTune.saveManifest')}
-          </Button>
-        </Col>
       ) : (
-        <CompareTune
-          left={manifests[manifests.length - 2]}
-          right={manifests[manifests.length - 1]}
-          runs={benchmarkRuns}
-          status={compareStatus}
-          benchmarkEnabled={source.kind === 'vector-set'}
-          benchmarkSampleCount={Math.min(50, sample.result.sourceCount)}
-          onConfirmBenchmark={() => void runTruthBenchmark()}
-        />
+        <Col gap="m">
+          <Button onClick={() => void runSensitivity()}>
+            {t('vectorVisualizer.tune.runSensitivity')}
+          </Button>
+          <Tune
+            currentConfig={tuneConfig}
+            recommendations={tuneRecommendations}
+            selectedK={selectedK}
+            sensitivityRuns={sensitivityRuns}
+            sourceKind={sourceKind}
+            onSelectK={selectSensitivityK}
+          />
+          {sample.result.metric === 'unknown' ? (
+            <Text role="status">
+              {t('vectorVisualizer.compareTune.metricUnavailable')}
+            </Text>
+          ) : manifests.length < 2 ? (
+            <Col gap="m">
+              <Text role="status">
+                {t('vectorVisualizer.compareTune.needManifests')}
+              </Text>
+              <Button onClick={saveManifest}>
+                {t('vectorVisualizer.compareTune.saveManifest')}
+              </Button>
+            </Col>
+          ) : (
+            <CompareTune
+              left={manifests[manifests.length - 2]}
+              right={manifests[manifests.length - 1]}
+              runs={benchmarkRuns}
+              status={compareStatus}
+              benchmarkEnabled={source.kind === 'vector-set'}
+              benchmarkSampleCount={Math.min(50, sample.result.sourceCount)}
+              onConfirmBenchmark={() => void runTruthBenchmark()}
+            />
+          )}
+        </Col>
       )
     ) : (
       <Col gap="m">
@@ -2077,6 +2616,11 @@ export const VectorVisualizerPage = () => {
         <Advanced
           sourceKind={sourceKind}
           status={advanced.status}
+          searchProfile={
+            sourceKind === 'search-index'
+              ? parseSearchExecutionEvidence(query.profile)
+              : undefined
+          }
           topology={
             sourceKind === 'search-index'
               ? { kind: 'unsupported' }
@@ -2104,7 +2648,10 @@ export const VectorVisualizerPage = () => {
       return value === undefined || value === '' ? [] : [String(value)]
     }) ?? [],
   ).size
-  const canShowClusterLabels = metadataGroupCount >= MIN_CLUSTER_LABEL_COUNT
+  const canShowClusterLabels =
+    metadataField === DBSCAN_COLOR_BY_VALUE
+      ? Boolean(dbscanResult && dbscanResult.clusterCount > 0)
+      : metadataGroupCount >= MIN_CLUSTER_LABEL_COUNT
   const normalizedFilterExpression = filterExpression.trim()
   const isFilterDirty = Boolean(
     sample &&
@@ -2184,6 +2731,19 @@ export const VectorVisualizerPage = () => {
           filter: sampledFilterExpression,
         })
       : t('vectorVisualizer.results.provenance.sampled')
+  const copyQuery = () => {
+    const selectedId = selectedIds[0]
+    if (!selectedId) return
+    const vector = session.getRawVector(selectedId)
+    if (!vector) return
+    const command = buildCopyableQuery(
+      source,
+      vector,
+      redisQueryLimitForVisibleNeighbors(neighborLimit),
+      sampledFilterExpression || undefined,
+    )
+    void navigator.clipboard?.writeText(command).catch(() => undefined)
+  }
   const visualizationActions = [
     {
       id: 'run-neighbors',
@@ -2192,12 +2752,49 @@ export const VectorVisualizerPage = () => {
       onClick: () => runNeighborsForSelected(selectedIds[0]),
     },
     {
+      id: 'copy-query',
+      label: t('vectorVisualizer.actions.copyQuery'),
+      disabled: selectedIds.length !== 1 || !sample,
+      onClick: copyQuery,
+    },
+    {
       id: 'clear-selection',
       label: t('vectorVisualizer.actions.clearSelection'),
       disabled: !selectedIds.length,
       onClick: () => setSelectedIds([]),
     },
   ]
+  const additionalWorkflowPanel = (
+    <AdditionalWorkflowPanel open={additionalWorkflowsOpen}>
+      <summary
+        onClick={(event) => {
+          event.preventDefault()
+          setAdditionalWorkflowsOpen((open) => !open)
+        }}
+      >
+        {t('vectorVisualizer.workflows.additional')}
+      </summary>
+      <AdditionalWorkflowBody>
+        <Row
+          aria-label={t('vectorVisualizer.workflows.additional')}
+          gap="s"
+          wrap
+        >
+          {workflows.slice(1).map((id) => (
+            <Button
+              aria-pressed={workflow === id}
+              key={id}
+              size="s"
+              onClick={() => selectWorkflow(id)}
+            >
+              {workflowLabels[id]}
+            </Button>
+          ))}
+        </Row>
+        {workflow !== 'explore' && content}
+      </AdditionalWorkflowBody>
+    </AdditionalWorkflowPanel>
+  )
   const atlasView = (
     <Explore
       sample={sample}
@@ -2212,6 +2809,18 @@ export const VectorVisualizerPage = () => {
       densityGridSize={densityGridSize}
       dbscanResult={dbscanResult}
       showMapLabels={showMapLabels}
+      projectionAlgorithm={projectionAlgorithm}
+      comparePanel={
+        compareProjections && altCoordinates
+          ? {
+              coordinates: altCoordinates,
+              quality: altQuality ?? {
+                kind: 'unknown',
+                reason: 'not-measured',
+              },
+            }
+          : undefined
+      }
     />
   )
   const neighborsView = (
@@ -2231,7 +2840,7 @@ export const VectorVisualizerPage = () => {
       status={query.status}
       topKBoundary={
         query.status === 'ready' || query.status === 'empty'
-          ? NATIVE_QUERY_LIMIT
+          ? neighborLimit
           : undefined
       }
       onRun={() => void runQuery()}
@@ -2253,6 +2862,7 @@ export const VectorVisualizerPage = () => {
       dbscanResult={dbscanResult}
       showMapLabels={showMapLabels}
       mode="selection"
+      projectionAlgorithm={projectionAlgorithm}
     />
   )
 
@@ -2325,10 +2935,8 @@ export const VectorVisualizerPage = () => {
           onModeChange={setWorkspaceMode}
         />
       </ModeHeader>
-      <TruthBanner role="status" size="S">
-        {t('vectorVisualizer.page.truthBanner')}
-      </TruthBanner>
       <VectorVisualizerWorkspace
+        additional={additionalWorkflowPanel}
         controls={
           <VectorVisualizerControls
             source={{
@@ -2339,6 +2947,11 @@ export const VectorVisualizerPage = () => {
               disabledReason: t(
                 'vectorVisualizer.controls.source.disabledReason',
               ),
+            }}
+            algorithm={{
+              value: projectionAlgorithm,
+              onChange: setProjectionAlgorithm,
+              label: t('vectorVisualizer.controls.algorithm.label'),
             }}
             filter={{
               ...(sourceKind === 'search-index'
@@ -2362,6 +2975,7 @@ export const VectorVisualizerPage = () => {
                         ? t('vectorVisualizer.controls.filter.dirtyHelp')
                         : t('vectorVisualizer.controls.filter.syntaxHelp'),
                     },
+                    suggestions: availableMetadataFields,
                     onChange: setFilterExpression,
                     onRemove: () => setFilterExpression(''),
                   }
@@ -2412,13 +3026,22 @@ export const VectorVisualizerPage = () => {
                 if (typeof value === 'number') setSampleBudget(value)
               },
             }}
+            neighborLimit={{
+              value: neighborLimit,
+              min: MIN_NEIGHBOR_LIMIT,
+              max: MAX_NEIGHBOR_LIMIT,
+              step: NEIGHBOR_LIMIT_STEP,
+              onChange: setNeighborLimit,
+            }}
             summary={
               sample
                 ? {
                     sampleCount: sample.result.sampleCount,
                     sourceCount: sample.result.sourceCount,
                     samplingMethod: sample.result.method,
-                    projectionAlgorithm: 'UMAP',
+                    projectionAlgorithm: t(
+                      `vectorVisualizer.controls.algorithm.${projectionAlgorithm}` as never,
+                    ),
                     seed: UMAP_SEED,
                     freshness: sample.result.freshness,
                     quality:
@@ -2478,6 +3101,18 @@ export const VectorVisualizerPage = () => {
                   }
                 : undefined
             }
+            compareProjections={{
+              label: t('vectorVisualizer.controls.compareProjections.label'),
+              checked: compareProjections,
+              ...(sample
+                ? { onChange: setCompareProjections }
+                : {
+                    disabled: true,
+                    disabledReason: t(
+                      'vectorVisualizer.controls.compareProjections.disabledReason',
+                    ),
+                  }),
+            }}
             loading={status === 'fetching' || status === 'layouting'}
           />
         }
@@ -2513,40 +3148,13 @@ export const VectorVisualizerPage = () => {
             status={resultStatus}
             onCopyVisibleIds={copyIds}
             onCopyFocusedId={(id) => copyIds([id])}
-            onExportFocusedResult={(row) => exportRows([row])}
-            onExportVisibleResults={exportRows}
+            onExportFocusedResult={(row) => void exportDocuments([row])}
+            onExportVisibleResults={(rows) => void exportDocuments(rows)}
             onResultFocus={(id) => setSelectedIds([id])}
             onRunNeighborsForFocused={runNeighborsForSelected}
           />
         }
       />
-      <details open={additionalWorkflowsOpen}>
-        <summary
-          onClick={(event) => {
-            event.preventDefault()
-            setAdditionalWorkflowsOpen((open) => !open)
-          }}
-        >
-          {t('vectorVisualizer.workflows.additional')}
-        </summary>
-        <Row
-          aria-label={t('vectorVisualizer.workflows.additional')}
-          gap="s"
-          wrap
-        >
-          {workflows.slice(1).map((id) => (
-            <Button
-              aria-pressed={workflow === id}
-              key={id}
-              size="s"
-              onClick={() => selectWorkflow(id)}
-            >
-              {workflowLabels[id]}
-            </Button>
-          ))}
-        </Row>
-        {workflow !== 'explore' && content}
-      </details>
     </NativeHost>
   )
 }

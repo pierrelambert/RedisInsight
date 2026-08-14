@@ -167,7 +167,7 @@ export const VectorVisualizerResults = ({
               variant="secondary-ghost"
               onClick={() => onExportVisibleResults(visibleRows)}
             >
-              Export visible results
+              Export visible documents
             </Button>
           )}
         </S.Actions>

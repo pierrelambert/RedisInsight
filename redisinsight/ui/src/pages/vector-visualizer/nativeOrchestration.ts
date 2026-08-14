@@ -59,6 +59,7 @@ export interface NativeSampleResult {
   kind: SamplingKind
   source: VectorDataSourceRef
   capabilities: typeof SEARCH_CAPABILITIES | typeof VECTOR_SET_CAPABILITIES
+  storage?: 'hash' | 'json'
   ids: string[]
   records: Array<{
     id: string
@@ -70,8 +71,12 @@ export interface NativeSampleResult {
   dimensions: number
   metric: SamplingMetric
   algorithm?: string
+  m?: number
+  efConstruction?: number
+  efRuntime?: number
   compression?: string
   graphMaxDegree?: number
+  searchWindowSize?: number
   quantization?: string
   graphFacts?: VectorSetGraphFacts
   sourceCount: number
@@ -309,8 +314,13 @@ const sampleSearch = async (input: SearchSamplingInput) => {
     dimensions: field.dimensions,
     metric: field.metric,
     algorithm: field.algorithm,
+    m: field.m,
+    efConstruction: field.efConstruction,
+    efRuntime: field.efRuntime,
+    storage: discovery.storage === 'json' ? 'json' : 'hash',
     compression: field.compression,
     graphMaxDegree: field.graphMaxDegree,
+    searchWindowSize: field.searchWindowSize,
     sourceCount: discovery.indexedCount,
     sampleCount: sample.length,
     method: 'ft-search',
@@ -626,6 +636,15 @@ const normalizeProfile = (
   return { kind: 'full', facts, stages }
 }
 
+const isSearchResultsReply = (reply: unknown): reply is unknown[] =>
+  Array.isArray(reply) && asNumber(reply[0]) !== undefined
+
+const searchResultsFromProfileReply = (reply: unknown): unknown => {
+  if (isSearchResultsReply(reply)) return reply
+  if (!Array.isArray(reply)) return reply
+  return reply.find(isSearchResultsReply) ?? reply[0]
+}
+
 const asQueryResult = (
   neighbors: Array<{
     id: string
@@ -680,7 +699,7 @@ export const orchestrateNativeQuery = async (
         const aggReply = await input.execute(
           planAggregateQuery({
             index: input.source.index,
-            baseQuery: `*=>[KNN ${input.limit} @${input.source.vectorField} $vv_anchor]`,
+            baseQuery: `*=>[KNN ${input.limit} @${input.source.vectorField} $vv_anchor AS __vv_metric]`,
             queryParameter: 'vv_anchor',
             vector: vectorBytes,
             loadFields: input.aggregateLoadFields,
@@ -763,7 +782,7 @@ export const orchestrateNativeQuery = async (
         const rangeProfileReply = Array.isArray(rangeReply)
           ? rangeReply
           : [rangeReply]
-        const rangeSearchResults = rangeProfileReply[0]
+        const rangeSearchResults = searchResultsFromProfileReply(rangeReply)
         const rangeParsed = parseSearchNeighbors(rangeSearchResults, {
           metric: input.metric,
           algorithm: input.algorithm,
@@ -822,7 +841,7 @@ export const orchestrateNativeQuery = async (
       )
       queryAccepted(input)
       const profileReply = Array.isArray(reply) ? reply : [reply]
-      const searchResults = profileReply[0]
+      const searchResults = searchResultsFromProfileReply(reply)
       const parsed = parseSearchNeighbors(searchResults, {
         metric: input.metric,
         algorithm: input.algorithm,

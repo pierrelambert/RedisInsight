@@ -6,16 +6,26 @@ import {
   RiSelect,
 } from 'uiSrc/components/base/forms/select/RiSelect'
 import NumericInput from 'uiSrc/components/base/inputs/NumericInput'
+import { Slider } from 'uiSrc/components/base/inputs'
 import SwitchInput from 'uiSrc/components/base/inputs/SwitchInput'
 import TextInput from 'uiSrc/components/base/inputs/TextInput'
 import { Col } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 
 import type {
+  VectorVisualizerControlOption,
   VectorVisualizerControlsProps,
   VectorVisualizerVisibilityControl,
 } from './VectorVisualizerControls.types'
 import * as S from './VectorVisualizerControls.styles'
+
+const ALGORITHM_OPTIONS: VectorVisualizerControlOption[] = [
+  { value: 'umap', label: 'UMAP' },
+  { value: 'pca', label: 'PCA' },
+]
+
+const isAlgorithmValue = (value: string): value is 'umap' | 'pca' =>
+  value === 'umap' || value === 'pca'
 
 const getDisabledMessage = (disabled?: boolean, disabledReason?: string) =>
   disabled
@@ -74,15 +84,18 @@ const VisibilityControl = ({
 
 const ControlsBody = ({
   source,
+  algorithm,
   colorBy,
   metadataField,
   filter,
   sampleBudget,
+  neighborLimit,
   clusterLabels,
   clusterLabelLimit,
   outliers,
   densityHeatmap,
   mapLabels,
+  compareProjections,
   summary,
   loading,
 }: VectorVisualizerControlsProps) => {
@@ -92,6 +105,14 @@ const ControlsBody = ({
     source.onChange,
     source.label,
   )
+  const algorithmState = algorithm
+    ? getCallbackControlState(
+        algorithm.disabled,
+        algorithm.disabledReason,
+        algorithm.onChange,
+        algorithm.label,
+      )
+    : undefined
   const colorByState = colorBy
     ? getCallbackControlState(
         colorBy.disabled,
@@ -130,6 +151,12 @@ const ControlsBody = ({
     sampleBudget.onChange,
     'Sample budget',
   )
+  const neighborLimitState = getCallbackControlState(
+    neighborLimit.disabled,
+    neighborLimit.disabledReason,
+    neighborLimit.onChange,
+    'Neighbor limit',
+  )
   const clusterLabelLimitState = clusterLabelLimit
     ? getCallbackControlState(
         clusterLabelLimit.disabled,
@@ -163,6 +190,24 @@ const ControlsBody = ({
         />
       </FormField>
 
+      {algorithm && (
+        <FormField
+          label={algorithm.label}
+          additionalText={algorithmState?.message}
+        >
+          <RiSelect
+            aria-label={algorithm.label}
+            disabled={algorithmState?.disabled}
+            options={ALGORITHM_OPTIONS}
+            value={algorithm.value}
+            valueRender={defaultValueRender}
+            onChange={(value) => {
+              if (isAlgorithmValue(value)) algorithm.onChange(value)
+            }}
+          />
+        </FormField>
+      )}
+
       {filter && (
         <Col gap="s">
           <FormField label="Filter" additionalText={filterState?.message}>
@@ -179,6 +224,27 @@ const ControlsBody = ({
             <Text aria-label="Filter syntax help" color="subdued" size="S">
               {filter.syntaxHelp.content}
             </Text>
+          )}
+          {!!filter.suggestions?.length && !filterState?.disabled && (
+            <S.Filters gap="xs" wrap>
+              {filter.suggestions.map((field) => (
+                <S.FilterChip
+                  aria-label={`Insert field @${field}`}
+                  key={field}
+                  size="s"
+                  variant="secondary-ghost"
+                  onClick={() => {
+                    const prefix =
+                      filter.value && !filter.value.endsWith(' ')
+                        ? `${filter.value} @${field}`
+                        : `${filter.value}@${field}`
+                    filter.onChange?.(prefix)
+                  }}
+                >
+                  @{field}
+                </S.FilterChip>
+              ))}
+            </S.Filters>
           )}
           {!!filter.activeFilters?.length && (
             <Col gap="xs">
@@ -265,11 +331,29 @@ const ControlsBody = ({
         </FormField>
       </Col>
 
+      <Col gap="xs">
+        <FormField
+          label={`Neighbor limit: ${neighborLimit.value}`}
+          additionalText={neighborLimitState.message}
+        >
+          <Slider
+            aria-label="Neighbor limit"
+            disabled={neighborLimitState.disabled}
+            max={neighborLimit.max}
+            min={neighborLimit.min}
+            step={neighborLimit.step ?? 1}
+            value={[neighborLimit.value]}
+            onChange={(values: number[]) => neighborLimit.onChange?.(values[0])}
+          />
+        </FormField>
+      </Col>
+
       {(clusterLabels ||
         clusterLabelLimit ||
         outliers ||
         densityHeatmap ||
-        mapLabels) && (
+        mapLabels ||
+        compareProjections) && (
         <Col gap="m">
           {clusterLabels && (
             <VisibilityControl
@@ -306,6 +390,12 @@ const ControlsBody = ({
             <VisibilityControl
               control={mapLabels}
               label="Show cluster labels on map"
+            />
+          )}
+          {compareProjections && (
+            <VisibilityControl
+              control={compareProjections}
+              label={compareProjections.label}
             />
           )}
         </Col>

@@ -23,6 +23,14 @@ export type VectorVisualizerControlSelect = {
   loading?: boolean
 } & (VectorVisualizerEnabledControl<string> | VectorVisualizerDisabledControl)
 
+export interface VectorVisualizerAlgorithmControl {
+  value: 'umap' | 'pca'
+  onChange: (algorithm: 'umap' | 'pca') => void
+  label: string
+  disabled?: boolean
+  disabledReason?: string
+}
+
 export type VectorVisualizerActiveFilter = {
   id: string
   label: string
@@ -38,6 +46,7 @@ export type VectorVisualizerFilterControl = {
   activeFilters?: VectorVisualizerActiveFilter[]
   onRemove?: (filterId: string) => void
   syntaxHelp?: VectorVisualizerFilterSyntaxHelp
+  suggestions?: string[]
   loading?: boolean
 } & (VectorVisualizerEnabledControl<string> | VectorVisualizerDisabledControl)
 
@@ -56,9 +65,21 @@ export type VectorVisualizerSampleBudget = {
   | VectorVisualizerDisabledControl
 )
 
+export type VectorVisualizerSliderControl = {
+  value: number
+  min: number
+  max: number
+  step?: number
+  loading?: boolean
+} & (VectorVisualizerEnabledControl<number> | VectorVisualizerDisabledControl)
+
 export type VectorVisualizerVisibilityControl = {
   checked: boolean
 } & (VectorVisualizerEnabledControl<boolean> | VectorVisualizerDisabledControl)
+
+export type VectorVisualizerCompareProjectionsControl = {
+  label: string
+} & VectorVisualizerVisibilityControl
 
 export type VectorVisualizerClusterLabelLimitControl =
   VectorVisualizerControlSelect
@@ -75,15 +96,18 @@ export type VectorVisualizerControlsSummary = {
 
 export type VectorVisualizerControlsProps = {
   source: VectorVisualizerControlSelect
+  algorithm?: VectorVisualizerAlgorithmControl
   colorBy?: VectorVisualizerControlSelect
   metadataField?: VectorVisualizerMetadataFieldControl
   filter?: VectorVisualizerFilterControl
   sampleBudget: VectorVisualizerSampleBudget
+  neighborLimit: VectorVisualizerSliderControl
   clusterLabels?: VectorVisualizerVisibilityControl
   clusterLabelLimit?: VectorVisualizerClusterLabelLimitControl
   outliers?: VectorVisualizerVisibilityControl
   densityHeatmap?: VectorVisualizerVisibilityControl
   mapLabels?: VectorVisualizerVisibilityControl
+  compareProjections?: VectorVisualizerCompareProjectionsControl
   summary?: VectorVisualizerControlsSummary
   loading?: boolean
 }

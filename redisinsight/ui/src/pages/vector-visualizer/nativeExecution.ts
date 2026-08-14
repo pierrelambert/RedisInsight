@@ -8,8 +8,12 @@ import type {
 
 const READ_ONLY_VECTOR_COMMANDS = new Set([
   'FT.INFO',
+  'FT.AGGREGATE',
+  'FT.HYBRID',
   'FT.SEARCH',
   'FT.PROFILE',
+  'HGETALL',
+  'JSON.GET',
   'VCARD',
   'VDIM',
   'VINFO',

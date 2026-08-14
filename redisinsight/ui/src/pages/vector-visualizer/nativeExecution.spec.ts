@@ -36,6 +36,18 @@ describe('native Vector Visualizer read-only executor', () => {
     await expect(execute(plan({ command: 'VGETATTR' }))).rejects.not.toThrow(
       'not allowed',
     )
+    await expect(execute(plan({ command: 'FT.AGGREGATE' }))).rejects.not.toThrow(
+      'not allowed',
+    )
+    await expect(execute(plan({ command: 'FT.HYBRID' }))).rejects.not.toThrow(
+      'not allowed',
+    )
+    await expect(execute(plan({ command: 'HGETALL' }))).rejects.not.toThrow(
+      'not allowed',
+    )
+    await expect(execute(plan({ command: 'JSON.GET' }))).rejects.not.toThrow(
+      'not allowed',
+    )
   })
 
   it('uses the current CLI route with an AbortSignal and returns only the Redis reply', async () => {

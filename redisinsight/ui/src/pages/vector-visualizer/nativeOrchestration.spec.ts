@@ -98,6 +98,43 @@ describe('native vector sampling orchestration', () => {
     expect(execute.mock.calls[1][0].arguments[1]).toBe('@region:{eu}')
   })
 
+  it('preserves HNSW tuning values discovered from FT.INFO', async () => {
+    const hnswInfo = searchInfo().map((value) => value)
+    const attributesIndex = hnswInfo.indexOf('attributes')
+    const attributes = hnswInfo[attributesIndex + 1] as unknown[][]
+    const algorithmIndex = attributes[0].indexOf('algorithm')
+    attributes[0][algorithmIndex + 1] = 'HNSW'
+    attributes[0] = [
+      ...attributes[0],
+      'm',
+      '32',
+      'ef_construction',
+      '300',
+      'ef_runtime',
+      '150',
+    ]
+    const execute = replyByCommand({
+      'FT.INFO': hnswInfo,
+      'FT.SEARCH': searchRows(
+        ['doc:1', float32(1, 2)],
+        ['doc:2', float32(3, 4)],
+      ),
+    })
+
+    const result = await orchestrateNativeSample({
+      source: { kind: 'search-index', index: 'idx', vectorField: 'embedding' },
+      limit: 500,
+      execute,
+    })
+
+    expect(result).toMatchObject({
+      algorithm: 'hnsw',
+      m: 32,
+      efConstruction: 300,
+      efRuntime: 150,
+    })
+  })
+
   it('keeps only explicitly allow-listed response metadata for the matrix seam', async () => {
     const execute = replyByCommand({
       'FT.INFO': searchInfo(1),
@@ -596,6 +633,82 @@ describe('native Vector Visualizer query orchestration', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
+  it('accepts RedisInsight raw integer wrappers in FT.PROFILE Search results', async () => {
+    const execute = jest.fn(async () => [
+      [
+        { type: 'integer', value: '2' },
+        'doc:anchor',
+        ['__vv_metric', '0'],
+        'doc:neighbor',
+        ['__vv_metric', '0.125'],
+      ],
+      ['Total profile time', '1.2'],
+    ])
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor', 'doc:neighbor'],
+        metric: 'cosine',
+        limit: 10,
+        execute,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'ready',
+      neighbors: [
+        { id: 'doc:anchor', value: 0 },
+        { id: 'doc:neighbor', value: 0.125 },
+      ],
+    })
+  })
+
+  it('extracts named FT.PROFILE Results tuples with RedisInsight raw integer wrappers', async () => {
+    const execute = jest.fn(async () => [
+      'Results',
+      [
+        { type: 'integer', value: '2' },
+        'doc:anchor',
+        ['__vv_metric', '0'],
+        'doc:neighbor',
+        ['__vv_metric', '0.125'],
+      ],
+      'Profile',
+      ['Total profile time', '1.2'],
+    ])
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor', 'doc:neighbor'],
+        metric: 'cosine',
+        limit: 10,
+        execute,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'ready',
+      neighbors: [
+        { id: 'doc:anchor', value: 0 },
+        { id: 'doc:neighbor', value: 0.125 },
+      ],
+      profile: {
+        kind: 'full',
+        facts: { 'Total profile time': '1.2' },
+      },
+    })
+  })
+
   const paramTokens = (plan: CommandPlan): unknown[] => {
     const args = plan.arguments
     const paramsIndex = args.indexOf('PARAMS')
@@ -727,6 +840,108 @@ describe('native Vector Visualizer query orchestration', () => {
         execute,
       }),
     ).resolves.toMatchObject({ kind: 'ready' })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('dispatches aggregate query mode with a named vector metric and loaded group field', async () => {
+    const execute = jest.fn(async (plan: CommandPlan) => {
+      expect(plan.command).toBe('FT.AGGREGATE')
+      expect(plan.arguments[1]).toBe(
+        '*=>[KNN 10 @embedding $vv_anchor AS __vv_metric]',
+      )
+      expect(plan.arguments).toEqual(
+        expect.arrayContaining([
+          'LOAD',
+          '1',
+          '@brand',
+          'GROUPBY',
+          '1',
+          '@brand',
+          'REDUCE',
+          'AVG',
+          '1',
+          '@__vv_metric',
+          'AS',
+          'avg_value',
+        ]),
+      )
+      return [1, ['brand', 'Nord', 'avg_value', '0.125']]
+    })
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor'],
+        metric: 'cosine',
+        limit: 10,
+        queryMode: 'aggregate',
+        aggregateGroupByFields: ['brand'],
+        aggregateLoadFields: ['brand'],
+        aggregateReduceOps: [
+          { function: 'AVG', field: '__vv_metric', alias: 'avg_value' },
+        ],
+        execute,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'aggregate-ready',
+      groups: [{ brand: 'Nord', avg_value: 0.125 }],
+    })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('dispatches hybrid query mode with nested yield-score clauses', async () => {
+    const execute = jest.fn(async (plan: CommandPlan) => {
+      expect(plan.command).toBe('FT.HYBRID')
+      const knnIndex = plan.arguments.indexOf('KNN')
+      const knnCount = Number(plan.arguments[knnIndex + 1])
+      expect(
+        plan.arguments.slice(knnIndex + 2, knnIndex + 2 + knnCount),
+      ).toEqual(['K', '10', 'YIELD_SCORE_AS', 'vector_score'])
+      const combineIndex = plan.arguments.indexOf('COMBINE')
+      const combineCount = Number(plan.arguments[combineIndex + 2])
+      expect(
+        plan.arguments.slice(combineIndex + 3, combineIndex + 3 + combineCount),
+      ).toEqual(['YIELD_SCORE_AS', 'hybrid_score'])
+      const sortIndex = plan.arguments.indexOf('SORTBY')
+      expect(plan.arguments.slice(sortIndex, sortIndex + 4)).toEqual([
+        'SORTBY',
+        '2',
+        'hybrid_score',
+        'ASC',
+      ])
+      return [
+        1,
+        'doc:anchor',
+        ['text_score', '0.5', 'vector_score', '0.1', 'hybrid_score', '0.6'],
+      ]
+    })
+
+    await expect(
+      orchestrateNativeQuery({
+        source: {
+          kind: 'search-index',
+          index: 'idx-products',
+          vectorField: 'embedding',
+        },
+        anchorId: 'doc:anchor',
+        anchorVector: new Float32Array([1, 0]),
+        sampleIds: ['doc:anchor'],
+        metric: 'cosine',
+        limit: 10,
+        queryMode: 'hybrid',
+        textQuery: '*',
+        execute,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'hybrid-ready',
+      documents: [{ id: 'doc:anchor', hybridScore: 0.6 }],
+    })
     expect(execute).toHaveBeenCalledTimes(1)
   })
 })

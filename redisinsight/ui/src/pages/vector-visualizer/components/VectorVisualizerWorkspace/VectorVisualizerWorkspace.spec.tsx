@@ -20,6 +20,11 @@ describe('VectorVisualizerWorkspace', () => {
             Canvas
           </section>
         }
+        additional={
+          <section data-testid="vector-visualizer-additional">
+            Additional workflows
+          </section>
+        }
       />,
     )
 
@@ -36,5 +41,35 @@ describe('VectorVisualizerWorkspace', () => {
     expect(
       screen.getByTestId('vector-visualizer-results-inspector'),
     ).toBeVisible()
+    expect(
+      screen.getByTestId('vector-visualizer-additional-workflows-region'),
+    ).toContainElement(screen.getByTestId('vector-visualizer-additional'))
+    expect(
+      screen.getByTestId('vector-visualizer-visualization'),
+    ).not.toContainElement(screen.getByTestId('vector-visualizer-additional'))
+  })
+
+  it('keeps additional workflows in a separate center-bottom panel outside the chart region', () => {
+    renderComponent()
+
+    const workspace = screen.getByTestId('vector-visualizer-workspace')
+    const visualizationRegion = screen.getByTestId(
+      'vector-visualizer-visualization-region',
+    )
+    const controlsRegion = screen.getByTestId(
+      'vector-visualizer-controls-region',
+    )
+    const resultsRegion = screen.getByTestId('vector-visualizer-results-region')
+    const additionalRegion = screen.getByTestId(
+      'vector-visualizer-additional-workflows-region',
+    )
+
+    expect(workspace).toContainElement(controlsRegion)
+    expect(workspace).toContainElement(visualizationRegion)
+    expect(workspace).toContainElement(resultsRegion)
+    expect(workspace).toContainElement(additionalRegion)
+    expect(visualizationRegion).not.toContainElement(additionalRegion)
+    expect(controlsRegion).not.toContainElement(additionalRegion)
+    expect(resultsRegion).not.toContainElement(additionalRegion)
   })
 })

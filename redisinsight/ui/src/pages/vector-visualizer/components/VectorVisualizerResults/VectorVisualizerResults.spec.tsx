@@ -174,14 +174,14 @@ describe('VectorVisualizerResults', () => {
     ).toBeInTheDocument()
   })
 
-  it('delegates privacy-safe copy and export actions without accessing browser APIs', () => {
+  it('delegates privacy-safe copy and document export actions without accessing browser APIs', () => {
     const onCopyVisibleIds = jest.fn()
     const onExportVisibleResults = jest.fn()
     renderComponent({ onCopyVisibleIds, onExportVisibleResults })
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy visible IDs' }))
     fireEvent.click(
-      screen.getByRole('button', { name: 'Export visible results' }),
+      screen.getByRole('button', { name: 'Export visible documents' }),
     )
 
     expect(onCopyVisibleIds).toHaveBeenCalledWith(['doc:1', 'doc:2'])

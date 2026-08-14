@@ -16,6 +16,11 @@ const defaultProps: VectorVisualizerControlsProps = {
     options: [{ value: 'embedding', label: 'embedding' }],
     onChange: jest.fn(),
   },
+  algorithm: {
+    label: 'Projection',
+    value: 'umap',
+    onChange: jest.fn(),
+  },
   filter: {
     value: 'category:books',
     activeFilters: [{ id: 'category', label: 'category:books' }],
@@ -24,6 +29,7 @@ const defaultProps: VectorVisualizerControlsProps = {
     syntaxHelp: {
       content: 'Filter syntax is supplied by the selected source.',
     },
+    suggestions: ['brand', 'model'],
   },
   colorBy: {
     label: 'Color by',
@@ -35,6 +41,13 @@ const defaultProps: VectorVisualizerControlsProps = {
     value: 2000,
     min: 500,
     max: 20000,
+    onChange: jest.fn(),
+  },
+  neighborLimit: {
+    value: 10,
+    min: 5,
+    max: 30,
+    step: 5,
     onChange: jest.fn(),
   },
   clusterLabels: { checked: true, onChange: jest.fn() },
@@ -101,16 +114,14 @@ describe('VectorVisualizerControls', () => {
     document.body.className = ''
   })
 
-  it('should render the persistent controls landmark without a one-option projection menu', () => {
+  it('should render the persistent controls landmark with a real projection selector', () => {
     renderComponent()
 
     expect(screen.getByTestId('vector-visualizer-controls')).toHaveAttribute(
       'aria-label',
       'Vector visualizer controls',
     )
-    expect(
-      screen.queryByRole('button', { name: 'Projection' }),
-    ).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Projection')).toHaveTextContent('UMAP')
     expect(
       screen.queryByText('UMAP is the supported local 2D projection.'),
     ).not.toBeInTheDocument()
@@ -120,6 +131,9 @@ describe('VectorVisualizerControls', () => {
     expect(screen.getByLabelText('Filter syntax help')).toHaveTextContent(
       'Filter syntax is supplied by the selected source.',
     )
+    expect(
+      screen.getByRole('button', { name: 'Insert field @brand' }),
+    ).toBeInTheDocument()
   })
 
   it('should make an unsupported filter unavailable with its reason', () => {
@@ -154,13 +168,16 @@ describe('VectorVisualizerControls', () => {
 
   it('should forward every supported control callback', async () => {
     const onSourceChange = jest.fn()
+    const onAlgorithmChange = jest.fn()
     const onFilterChange = jest.fn()
     const onRemove = jest.fn()
     const onColorByChange = jest.fn()
     const onSampleBudgetChange = jest.fn()
+    const onNeighborLimitChange = jest.fn()
     const onClusterLabelsChange = jest.fn()
     const onClusterLabelLimitChange = jest.fn()
     const onOutliersChange = jest.fn()
+    const onCompareProjectionsChange = jest.fn()
     const user = userEvent.setup()
 
     renderComponent({
@@ -173,10 +190,16 @@ describe('VectorVisualizerControls', () => {
           { value: 'title_embedding', label: 'title_embedding' },
         ],
       },
+      algorithm: {
+        label: 'Projection',
+        value: 'umap',
+        onChange: onAlgorithmChange,
+      },
       filter: {
         value: defaultProps.filter!.value,
         activeFilters: defaultProps.filter!.activeFilters,
         syntaxHelp: defaultProps.filter!.syntaxHelp,
+        suggestions: defaultProps.filter!.suggestions,
         onChange: onFilterChange,
         onRemove,
       },
@@ -195,6 +218,13 @@ describe('VectorVisualizerControls', () => {
         max: defaultProps.sampleBudget.max,
         onChange: onSampleBudgetChange,
       },
+      neighborLimit: {
+        value: defaultProps.neighborLimit.value,
+        min: defaultProps.neighborLimit.min,
+        max: defaultProps.neighborLimit.max,
+        step: defaultProps.neighborLimit.step,
+        onChange: onNeighborLimitChange,
+      },
       clusterLabels: { checked: true, onChange: onClusterLabelsChange },
       clusterLabelLimit: {
         label: 'Cluster label limit',
@@ -203,14 +233,21 @@ describe('VectorVisualizerControls', () => {
         onChange: onClusterLabelLimitChange,
       },
       outliers: { checked: false, onChange: onOutliersChange },
+      compareProjections: {
+        label: 'Compare UMAP and PCA',
+        checked: false,
+        onChange: onCompareProjectionsChange,
+      },
     })
 
     const selectControls = screen.getAllByRole('combobox')
     await user.click(selectControls[0])
     await user.click(screen.getByText('title_embedding'))
     await user.click(selectControls[1])
+    await user.click(screen.getByText('PCA'))
+    await user.click(selectControls[2])
     await user.click(screen.getByText('author'))
-    await user.click(screen.getByLabelText('Cluster label limit'))
+    await user.click(selectControls[3])
     await user.click(screen.getByText('Top 25'))
     fireEvent.change(screen.getByLabelText('Filter sampled documents'), {
       target: { value: 'category:music' },
@@ -221,17 +258,24 @@ describe('VectorVisualizerControls', () => {
     fireEvent.change(screen.getByLabelText(/Sample budget/), {
       target: { value: '2500' },
     })
+    fireEvent.keyDown(screen.getByLabelText('Neighbor limit'), {
+      key: 'ArrowRight',
+    })
     await user.click(screen.getAllByRole('switch')[0])
     await user.click(screen.getAllByRole('switch')[1])
+    await user.click(screen.getAllByRole('switch')[2])
 
     expect(onSourceChange).toHaveBeenCalledWith('title_embedding')
+    expect(onAlgorithmChange).toHaveBeenCalledWith('pca')
     expect(onFilterChange).toHaveBeenCalledWith('category:music')
     expect(onRemove).toHaveBeenCalledWith('category')
     expect(onColorByChange).toHaveBeenCalledWith('author')
     expect(onSampleBudgetChange).toHaveBeenCalledWith(2500)
+    expect(onNeighborLimitChange).toHaveBeenCalledWith(15)
     expect(onClusterLabelsChange).toHaveBeenCalledWith(false)
     expect(onClusterLabelLimitChange).toHaveBeenCalledWith('top-25')
     expect(onOutliersChange).toHaveBeenCalledWith(true)
+    expect(onCompareProjectionsChange).toHaveBeenCalledWith(true)
   })
 
   it('should apply color changes to the current sample and expose a controlled cluster label limit', () => {
@@ -266,6 +310,10 @@ describe('VectorVisualizerControls', () => {
         value: 'embedding',
         options: [{ value: 'embedding', label: 'embedding' }],
       } as unknown as VectorVisualizerControlsProps['source'],
+      algorithm: {
+        label: 'Projection',
+        value: 'umap',
+      } as unknown as NonNullable<VectorVisualizerControlsProps['algorithm']>,
       filter: {
         value: 'category:books',
         activeFilters: [{ id: 'category', label: 'category:books' }],
@@ -280,6 +328,11 @@ describe('VectorVisualizerControls', () => {
         min: 500,
         max: 20000,
       } as unknown as VectorVisualizerControlsProps['sampleBudget'],
+      neighborLimit: {
+        value: 10,
+        min: 5,
+        max: 30,
+      } as unknown as VectorVisualizerControlsProps['neighborLimit'],
       clusterLabels: {
         checked: true,
       } as unknown as NonNullable<
@@ -305,12 +358,15 @@ describe('VectorVisualizerControls', () => {
       screen.getByRole('button', { name: 'Remove filter category:books' }),
     ).toBeDisabled()
     expect(screen.getByLabelText(/Sample budget/)).toBeDisabled()
+    expect(screen.getByLabelText('Neighbor limit')).toHaveAttribute(
+      'data-disabled',
+    )
     screen.getAllByRole('switch').forEach((control) => {
       expect(control).toBeDisabled()
     })
     expect(
       screen.getAllByText(/response-backed action is connected/),
-    ).toHaveLength(8)
+    ).toHaveLength(10)
   })
 
   it('should preserve an explicit disabled reason when no callback is supplied', () => {

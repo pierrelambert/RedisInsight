@@ -4,6 +4,7 @@ import { Button } from 'uiSrc/components/base/forms/buttons'
 import { Col } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 import { PluginsThemeContext } from 'uiSrc/components/base/utils/pluginsThemeContext'
+import { redisSimilarityFromDistance } from 'uiSrc/packages/vector-visualizer/src/metrics'
 
 import type {
   VectorVisualizerNeighborRecord,
@@ -65,7 +66,7 @@ const metricPresentation = (
   const rawValue = value.toFixed(2)
 
   if (metric === 'distance') {
-    const similarity = (1 - value).toFixed(2)
+    const similarity = redisSimilarityFromDistance(value).toFixed(2)
 
     return {
       accessibleLabel: `Similarity: ${similarity}, Raw distance: ${rawValue}`,
@@ -132,7 +133,9 @@ export const VectorVisualizerNeighbors = ({
   topKBoundary,
 }: VectorVisualizerNeighborsProps) => {
   const { theme } = useContext(PluginsThemeContext)
-  const radialNeighbors = neighbors.filter(({ id }) => id !== anchorId)
+  const radialNeighbors = neighbors
+    .filter(({ id }) => id !== anchorId)
+    .slice(0, topKBoundary)
   const metric = neighbors[0]?.metric ?? 'distance'
   const finiteValues = radialNeighbors
     .map(({ value }) => value)
@@ -186,7 +189,7 @@ export const VectorVisualizerNeighbors = ({
           </Title>
           <Text color="subdued" size="XS">
             {metric === 'distance'
-              ? 'Similarity (1 - raw distance)'
+              ? 'Similarity from Redis distance'
               : metricLabel(metric)}{' '}
             preserves response order · angle is layout only ·{' '}
             {exactnessLabel[exactness]} · {freshness}

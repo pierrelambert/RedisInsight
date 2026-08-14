@@ -11,7 +11,8 @@ export const Inspector = styled(Col)`
   max-inline-size: ${({ theme }) =>
     `calc(${theme.core.space.space800} * 5 + ${theme.core.space.space500})`};
   min-block-size: 0;
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: ${({ theme }) => theme.core.space.space150};
   border-inline-start: ${({ theme }) => theme.core.space.space010} solid
     ${({ theme }) => theme.semantic.color.border.neutral500};

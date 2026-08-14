@@ -285,13 +285,19 @@ describe('VectorVisualizerPage', () => {
     )
     expect(screen.getByRole('button', { name: 'Sample vectors' })).toBeEnabled()
     expect(screen.getByLabelText(/Sample budget/)).toHaveValue('2000')
-    expect(screen.queryByText('Projection')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Projection')).toHaveTextContent('UMAP')
+    expect(screen.getByLabelText('Compare UMAP and PCA')).toBeDisabled()
     const pageContext = screen.getByTestId('vector-visualizer-page-context')
     expect(pageContext).toHaveTextContent('Search index idx-products')
     expect(pageContext).toHaveTextContent('Not sampled')
     expect(
       screen.getByTestId('vector-visualizer-visualization'),
     ).not.toContainElement(pageContext)
+    expect(
+      screen.queryByText(
+        'Atlas is a 2D projection of a bounded sample. Distances in the plot do not replace response-backed source metrics.',
+      ),
+    ).not.toBeInTheDocument()
     openAdditionalWorkflow('Health')
 
     expect(screen.getByRole('heading', { name: 'X-ray summary' })).toBeVisible()
@@ -345,7 +351,10 @@ describe('VectorVisualizerPage', () => {
             response:
               searchCalls === 1
                 ? [1, 'doc:1', ['embedding', vectorBytes]]
-                : [1, 'doc:neighbor', ['__vv_metric', 0.125]],
+                : [
+                    [1, 'doc:neighbor', ['__vv_metric', 0.125]],
+                    ['Total profile time', '2.5', 'Vector mode', 'BATCHES'],
+                  ],
           },
         }) as never
       })
@@ -506,6 +515,127 @@ describe('VectorVisualizerPage', () => {
     expect(screen.getByText(/^source configuration:/)).toHaveTextContent(
       '(measured)',
     )
+
+    openAdditionalWorkflow('Advanced')
+    expect(screen.getByText('Measured Search execution evidence')).toBeVisible()
+    expect(
+      screen.queryByText(
+        'Unavailable: Redis did not return a measurable FT.PROFILE response.',
+      ),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('2.5')).toBeVisible()
+    expect(screen.getByText('BATCHES')).toBeVisible()
+  })
+
+  it('exports backing Redis HASH documents instead of chart result rows', async () => {
+    const blobParts: BlobPart[][] = []
+    const originalBlob = global.Blob
+    const originalCreateElement = document.createElement.bind(document)
+    const originalCreateObjectUrl = URL.createObjectURL
+    const originalRevokeObjectUrl = URL.revokeObjectURL
+    const click = jest.fn()
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: jest.fn(() => 'blob:vector-documents'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: jest.fn(),
+    })
+    global.Blob = jest.fn((parts?: BlobPart[], options?: BlobPropertyBag) => {
+      blobParts.push(parts ?? [])
+      return new originalBlob(parts, options)
+    }) as never
+    jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      const element = originalCreateElement(tagName)
+      if (String(tagName) === 'a')
+        Object.defineProperty(element, 'click', {
+          configurable: true,
+          value: click,
+        })
+      return element
+    })
+    const vectorBytes = float32(1, 2)
+    const commands: string[] = []
+    jest.spyOn(apiService, 'post').mockImplementation((_, body) => {
+      const command = (body as { command: string }).command
+      commands.push(command)
+      const response = command.startsWith('FT.INFO')
+        ? searchInfo(1, 'COSINE', [['brand', 'TAG']])
+        : command.startsWith('FT.SEARCH')
+          ? searchRowsWithFields([
+              'bikes:10088',
+              vectorBytes,
+              { brand: 'Nord' },
+            ])
+          : command.startsWith('HGETALL')
+            ? [
+                'model',
+                'Ncc1702',
+                'brand',
+                'Nord',
+                'price',
+                '3599',
+                'description_embeddings',
+                vectorBytes,
+              ]
+            : []
+      return Promise.resolve({
+        data: { status: 'success', response },
+      }) as never
+    })
+    setVectorVisualizerSource({
+      kind: 'search-index',
+      index: 'idx:bikes_vss',
+      vectorField: 'embedding',
+    })
+
+    render(<VectorVisualizerPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: /^(Index|Vector set) atlas$/ }),
+      ).toBeVisible(),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Export visible documents' }),
+    )
+
+    await waitFor(() =>
+      expect(commands.some((command) => command.startsWith('HGETALL'))).toBe(
+        true,
+      ),
+    )
+    await waitFor(() => expect(blobParts).toHaveLength(1))
+    const payload = JSON.parse(String(blobParts[0][0]))
+    expect(payload).toEqual([
+      {
+        id: 'bikes:10088',
+        source: {
+          kind: 'search-index',
+          index: 'idx:bikes_vss',
+          storage: 'hash',
+        },
+        document: {
+          model: 'Ncc1702',
+          brand: 'Nord',
+          price: '3599',
+          description_embeddings: vectorBytes,
+        },
+      },
+    ])
+    expect(JSON.stringify(payload)).not.toContain('"metric"')
+    expect(JSON.stringify(payload)).not.toContain('"plotted"')
+    expect(click).toHaveBeenCalledTimes(1)
+    global.Blob = originalBlob
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: originalCreateObjectUrl,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: originalRevokeObjectUrl,
+    })
   })
 
   it('preserves a binary Vector Set member through VEMB and documented VLINKS layers', async () => {
@@ -583,7 +713,7 @@ describe('VectorVisualizerPage', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Preview truth benchmark' }),
     )
-    expect(screen.getByText(/VSIM TRUTH/)).toBeVisible()
+    expect(screen.getByText(/VSIM,\s*TRUTH/)).toBeVisible()
     expect(commands.some((command) => command.startsWith('VSIM'))).toBe(false)
     fireEvent.click(
       screen.getByRole('button', { name: 'Confirm read-only benchmark' }),
@@ -609,8 +739,13 @@ describe('VectorVisualizerPage', () => {
     expect(screen.getByText('Layer 0')).toBeVisible()
   })
 
-  it('applies Color by changes immediately and lets users show more than twelve labels', async () => {
+  it('applies Color by changes immediately and explains DBSCAN clusters with sampled metadata', async () => {
     const user = userEvent.setup()
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
     const rows = Array.from(
       { length: 13 },
       (_, index) =>
@@ -672,15 +807,23 @@ describe('VectorVisualizerPage', () => {
       ),
     ).toBe(true)
     expect(screen.getByText('@brand:brand-1')).toBeVisible()
-    expect(atlasPanel.getAllByLabelText(/cluster label$/)).toHaveLength(12)
-
-    await user.click(screen.getByLabelText('Cluster label limit'))
-    await user.click(screen.getByText('All visible'))
-    expect(atlasPanel.getAllByLabelText(/cluster label$/)).toHaveLength(13)
-
     await user.click(screen.getByLabelText('Color by'))
     await user.click(screen.getByText('type'))
     expect(atlasPlot).toHaveAttribute('data-colored-point-count', '2')
+    await user.click(screen.getByLabelText('Color by'))
+    await user.click(screen.getByText(/Clusters \(DBSCAN\)/))
+    expect(atlasPlot).toHaveAttribute('data-colored-point-count', '13')
+    expect(
+      screen.getByRole('button', { name: /Cluster \d+ · brand-/ }),
+    ).toBeVisible()
+    fireEvent.click(screen.getByTestId('vector-visualizer-selected-row-doc:1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy query' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    const copiedQuery = writeText.mock.calls[0][0] as string
+    expect(copiedQuery).toContain('KNN 11')
+    expect(copiedQuery).not.toContain('KNN 50')
+    expect(copiedQuery).toContain('"\\x00\\x00\\x80\\x3f')
+    expect(copiedQuery).not.toContain('\\\\x')
     fireEvent.change(screen.getByLabelText('Filter sampled documents'), {
       target: { value: '@type:bike' },
     })
@@ -731,9 +874,11 @@ describe('VectorVisualizerPage', () => {
         name: 'Inspect duplicate candidate group 1',
       }),
     )
-    expect(screen.getAllByLabelText('Selected IDs')[0]).toHaveTextContent(
-      'doc:1, doc:2',
-    )
+    expect(screen.queryByLabelText('Selected IDs')).not.toBeInTheDocument()
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+    expect(
+      screen.getAllByTestId('vector-visualizer-selected-row-doc:1')[0],
+    ).toHaveAttribute('data-selected', 'true')
     expect(
       screen.getAllByLabelText('Health candidate rule')[0],
     ).toHaveTextContent(
@@ -745,9 +890,11 @@ describe('VectorVisualizerPage', () => {
         name: 'Inspect outlier candidate doc:12',
       }),
     )
-    expect(screen.getAllByLabelText('Selected IDs')[0]).toHaveTextContent(
-      'doc:12',
-    )
+    expect(screen.queryByLabelText('Selected IDs')).not.toBeInTheDocument()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    expect(
+      screen.getAllByTestId('vector-visualizer-selected-row-doc:12')[0],
+    ).toHaveAttribute('data-selected', 'true')
     expect(screen.getByLabelText('Health candidate rule')).toHaveTextContent(
       'median/MAD over kth-neighbor cosine distances; k=10; exactness sample-exact',
     )
@@ -760,8 +907,10 @@ describe('VectorVisualizerPage', () => {
         [`doc:${index + 1}`, float32(index + 1, 1)] as [string, string],
     )
     let searchCalls = 0
+    const commands: string[] = []
     jest.spyOn(apiService, 'post').mockImplementation((_, body) => {
       const command = (body as { command: string }).command
+      commands.push(command)
       if (command.startsWith('FT.INFO'))
         return Promise.resolve({
           data: { status: 'success', response: searchInfo(12) },
@@ -812,6 +961,36 @@ describe('VectorVisualizerPage', () => {
     expect(
       screen.getByLabelText('Query-centered radial neighbor layout'),
     ).toHaveAttribute('data-neighbor-count', '2')
+    expect(
+      commands.some((command) =>
+        command.includes(
+          serializeNativeArgument(
+            '*=>[KNN 11 @embedding $vv_anchor AS __vv_metric]',
+          ),
+        ),
+      ),
+    ).toBe(true)
+    fireEvent.keyDown(screen.getByLabelText('Neighbor limit'), {
+      key: 'ArrowRight',
+    })
+    fireEvent.keyDown(screen.getByLabelText('Neighbor limit'), {
+      key: 'ArrowRight',
+    })
+    await waitFor(() =>
+      expect(
+        commands.some((command) =>
+          command.includes(
+            serializeNativeArgument(
+              '*=>[KNN 21 @embedding $vv_anchor AS __vv_metric]',
+            ),
+          ),
+        ),
+      ).toBe(true),
+    )
+    expect(
+      screen.getByLabelText('Query-centered radial neighbor layout'),
+    ).toHaveAttribute('data-result-boundary', '20')
+    expect(commands.some((command) => command.includes('KNN 50'))).toBe(false)
     expect(
       screen.queryByRole('heading', { name: 'Retrieval debugger' }),
     ).not.toBeInTheDocument()

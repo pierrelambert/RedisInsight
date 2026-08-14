@@ -116,10 +116,26 @@ describe('VectorVisualizerNeighbors', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('caps plotted non-anchor dots to the requested neighbor boundary', () => {
+    renderComponent({ topKBoundary: 2 })
+
+    expect(
+      screen.getByLabelText('Query-centered radial neighbor layout'),
+    ).toHaveAttribute('data-neighbor-count', '2')
+    expect(
+      screen.getByRole('button', { name: neighborButtonLabel }),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('button', {
+        name: `Select ${thirdNeighborId}, Similarity: 0.33, Raw distance: 0.67`,
+      }),
+    ).not.toBeInTheDocument()
+  })
+
   it('presents a raw distance as similarity while retaining the raw evidence', () => {
     renderComponent()
 
-    expect(screen.getByText(/Similarity \(1 - raw distance\)/)).toBeVisible()
+    expect(screen.getByText(/Similarity from Redis distance/)).toBeVisible()
     expect(
       screen.getByRole('button', { name: neighborButtonLabel }),
     ).toHaveAttribute('title', 'Similarity: 0.84 · Raw distance: 0.16')
@@ -133,6 +149,41 @@ describe('VectorVisualizerNeighbors', () => {
         'Similarity metric threshold ring 0.71; raw distance 0.29',
       ),
     ).toBeVisible()
+  })
+
+  it('keeps Redis cosine distances over one as non-negative similarities', () => {
+    renderComponent({
+      neighbors: [
+        {
+          id: anchorId,
+          metric: 'distance',
+          plotted: true,
+          rank: 1,
+          value: 0,
+        },
+        {
+          id: neighborId,
+          metric: 'distance',
+          plotted: true,
+          rank: 2,
+          value: 1.04,
+        },
+      ],
+      records: [
+        { id: anchorId, metadata: { region: 'north' } },
+        { id: neighborId, metadata: { region: 'south' } },
+      ],
+    })
+
+    expect(
+      screen.getByRole('button', {
+        name: `Select ${neighborId}, Similarity: 0.96, Raw distance: 1.04`,
+      }),
+    ).toHaveAttribute('title', 'Similarity: 0.96 · Raw distance: 1.04')
+    expect(screen.queryByText(/Similarity: -/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText(/Similarity metric threshold ring -/),
+    ).not.toBeInTheDocument()
   })
 
   it('keeps response selection controlled and delegates actions', () => {
