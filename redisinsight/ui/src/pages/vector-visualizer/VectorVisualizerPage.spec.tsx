@@ -875,8 +875,8 @@ describe('VectorVisualizerPage', () => {
     const copiedQuery = writeText.mock.calls[0][0] as string
     expect(copiedQuery).toContain('KNN 11')
     expect(copiedQuery).not.toContain('KNN 50')
-    expect(copiedQuery).toContain('"\\x00\\x00\\x80\\x3f')
-    expect(copiedQuery).not.toContain('\\\\x')
+    expect(copiedQuery).toContain('"<selected-vector-binary-blob>"')
+    expect(copiedQuery).not.toContain('\\x')
     fireEvent.change(screen.getByLabelText('Filter sampled documents'), {
       target: { value: '@type:bike' },
     })

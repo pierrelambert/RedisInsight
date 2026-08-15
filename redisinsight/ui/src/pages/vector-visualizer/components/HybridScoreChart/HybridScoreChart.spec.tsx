@@ -43,4 +43,18 @@ describe('HybridScoreChart', () => {
     renderComponent({ documents: [] })
     expect(screen.getByTestId('hybrid-score-chart')).toBeInTheDocument()
   })
+
+  it('should render documents with partial HYBRID score channels', () => {
+    renderComponent({
+      documents: [
+        { id: 'doc:vector', vectorScore: 0.750610458745 },
+        { id: 'doc:text', textScore: 3.30244346072 },
+      ],
+    })
+
+    expect(screen.getByLabelText('Hybrid returned documents')).toBeVisible()
+    expect(screen.getByText('doc:vector')).toBeVisible()
+    expect(screen.getByText('doc:text')).toBeVisible()
+    expect(screen.getAllByText('Unavailable')).toHaveLength(4)
+  })
 })

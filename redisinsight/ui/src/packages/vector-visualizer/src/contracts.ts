@@ -137,9 +137,9 @@ export interface HybridQueryInput {
 
 export interface HybridScoreDocument {
   id: string
-  textScore: number
-  vectorScore: number
-  hybridScore: number
+  textScore?: number
+  vectorScore?: number
+  hybridScore?: number
   fields?: Record<string, string>
 }
 

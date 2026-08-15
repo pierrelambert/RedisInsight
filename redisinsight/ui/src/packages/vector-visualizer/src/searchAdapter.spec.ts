@@ -1081,6 +1081,23 @@ describe('parseHybridResponse', () => {
     ])
   })
 
+  it('keeps HYBRID documents when Redis returns only one score channel for a row', () => {
+    const reply = {
+      total_results: 2,
+      results: [
+        ['__key', 'doc:vector', 'vector_score', '0.750610458745'],
+        ['__key', 'doc:text', 'text_score', '3.30244346072'],
+      ],
+    }
+    const result = parseHybridResponse(reply)
+
+    expect(result.totalResults).toBe(2)
+    expect(result.documents).toEqual([
+      { id: 'doc:vector', vectorScore: 0.750610458745 },
+      { id: 'doc:text', textScore: 3.30244346072 },
+    ])
+  })
+
   it('includes non-score fields in the fields property', () => {
     const reply = {
       total_results: 1,

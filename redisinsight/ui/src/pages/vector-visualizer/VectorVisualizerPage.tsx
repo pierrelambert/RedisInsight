@@ -94,10 +94,7 @@ import {
   type NativeVisualizerWorkflow,
   type VectorDataSourceRef,
 } from './nativeHandoff'
-import {
-  createNativeReadOnlyExecutor,
-  serializeNativeArgument,
-} from './nativeExecution'
+import { createNativeReadOnlyExecutor } from './nativeExecution'
 import { runNativeVectorSetBenchmark } from './nativeBenchmark'
 import { buildNativeManifestProvenance } from './nativeManifest'
 import { buildNativeQuerySourceSample } from './nativeQueryEvidence'
@@ -133,9 +130,6 @@ const AGGREGATE_COUNT_ALIAS = 'count'
 const AGGREGATE_BEST_DISTANCE_ALIAS = 'best_distance'
 const AGGREGATE_AVERAGE_DISTANCE_ALIAS = 'avg_distance'
 const AGGREGATE_WORST_DISTANCE_ALIAS = 'worst_distance'
-
-const vectorToRedisBlobArgument = (vector: Float32Array): Uint8Array =>
-  new Uint8Array(vector.buffer, vector.byteOffset, vector.byteLength)
 
 const quoteCliToken = (value: string): string => JSON.stringify(value)
 
@@ -181,7 +175,6 @@ const aggregateMetricLabels = (metric: VectorMetric | 'unknown') => {
 
 const buildCopyableQuery = (
   source: VectorDataSourceRef,
-  anchorVector: Float32Array,
   limit: number,
   filter?: string,
 ): string => {
@@ -197,7 +190,7 @@ const buildCopyableQuery = (
       'PARAMS',
       '2',
       'vv_anchor',
-      serializeNativeArgument(vectorToRedisBlobArgument(anchorVector)),
+      quoteCliToken('<selected-vector-binary-blob>'),
       'SORTBY',
       '__vv_metric',
       'ASC',
@@ -213,8 +206,8 @@ const buildCopyableQuery = (
     'VSIM',
     quoteCliToken(new TextDecoder().decode(source.key)),
     'VALUES',
-    String(anchorVector.length),
-    ...Array.from(anchorVector, String),
+    '<dimensions>',
+    '<selected vector values>',
     'COUNT',
     String(limit),
     'WITHSCORES',
@@ -1102,9 +1095,9 @@ export const VectorVisualizerPage = () => {
   const [hybridResult, setHybridResult] = useState<{
     documents: Array<{
       id: string
-      textScore: number
-      vectorScore: number
-      hybridScore: number
+      textScore?: number
+      vectorScore?: number
+      hybridScore?: number
       fields?: Record<string, string>
     }>
     totalResults: number
@@ -2899,7 +2892,6 @@ export const VectorVisualizerPage = () => {
     if (!vector) return
     const command = buildCopyableQuery(
       source,
-      vector,
       redisQueryLimitForVisibleNeighbors(neighborLimit),
       sampledFilterExpression || undefined,
     )

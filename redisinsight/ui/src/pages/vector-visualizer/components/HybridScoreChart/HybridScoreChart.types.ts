@@ -1,8 +1,8 @@
 export interface HybridScoreChartDocument {
   id: string
-  textScore: number
-  vectorScore: number
-  hybridScore: number
+  textScore?: number
+  vectorScore?: number
+  hybridScore?: number
 }
 
 export interface HybridScoreChartProps {

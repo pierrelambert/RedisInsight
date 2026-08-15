@@ -1,7 +1,10 @@
 import React, { useEffect, useRef } from 'react'
 
 import * as S from './HybridScoreChart.styles'
-import type { HybridScoreChartProps } from './HybridScoreChart.types'
+import type {
+  HybridScoreChartDocument,
+  HybridScoreChartProps,
+} from './HybridScoreChart.types'
 
 const CHART_WIDTH = 400
 const CHART_HEIGHT = 300
@@ -20,6 +23,24 @@ const RAMP_GREEN_RANGE = 100
 const RAMP_BLUE_BASE = 180
 const RAMP_BLUE_RANGE = 75
 
+const isPlottable = (
+  document: HybridScoreChartDocument,
+): document is HybridScoreChartDocument & {
+  textScore: number
+  vectorScore: number
+} =>
+  document.textScore !== undefined &&
+  Number.isFinite(document.textScore) &&
+  document.vectorScore !== undefined &&
+  Number.isFinite(document.vectorScore)
+
+const scoreLabel = (value: number | undefined) =>
+  value === undefined || !Number.isFinite(value) ? (
+    <S.Unavailable>Unavailable</S.Unavailable>
+  ) : (
+    value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+  )
+
 /**
  * Minimal Canvas 2D scatter chart plotting FT.HYBRID results: text_score on
  * the x-axis, vector_score on the y-axis, and hybrid_score encoded as dot
@@ -32,7 +53,8 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !documents.length) return
+    const plottableDocuments = documents.filter(isPlottable)
+    if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -42,16 +64,25 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
     ctx.scale(dpr, dpr)
 
     ctx.clearRect(0, 0, CHART_WIDTH, CHART_HEIGHT)
+    if (!plottableDocuments.length) {
+      ctx.fillStyle = TITLE_COLOR
+      ctx.font = TITLE_FONT
+      ctx.textAlign = 'center'
+      ctx.fillText('No complete text/vector score pairs', CHART_WIDTH / 2, 150)
+      return
+    }
 
-    const textScores = documents.map((doc) => doc.textScore)
-    const vectorScores = documents.map((doc) => doc.vectorScore)
-    const hybridScores = documents.map((doc) => doc.hybridScore)
+    const textScores = plottableDocuments.map((doc) => doc.textScore)
+    const vectorScores = plottableDocuments.map((doc) => doc.vectorScore)
+    const hybridScores = plottableDocuments.flatMap((doc) =>
+      doc.hybridScore === undefined ? [] : [doc.hybridScore],
+    )
     const minText = Math.min(...textScores)
     const maxText = Math.max(...textScores)
     const minVector = Math.min(...vectorScores)
     const maxVector = Math.max(...vectorScores)
-    const minHybrid = Math.min(...hybridScores)
-    const maxHybrid = Math.max(...hybridScores)
+    const minHybrid = hybridScores.length ? Math.min(...hybridScores) : 0
+    const maxHybrid = hybridScores.length ? Math.max(...hybridScores) : 0
 
     const plotWidth = CHART_WIDTH - CHART_PADDING * 2
     const plotHeight = CHART_HEIGHT - CHART_PADDING * 2
@@ -86,11 +117,11 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
     ctx.fillText('vector_score', 0, 0)
     ctx.restore()
 
-    documents.forEach((doc) => {
+    plottableDocuments.forEach((doc) => {
       const x = scaleX(doc.textScore)
       const y = scaleY(doc.vectorScore)
       const intensity =
-        maxHybrid === minHybrid
+        doc.hybridScore === undefined || maxHybrid === minHybrid
           ? 0.5
           : (doc.hybridScore - minHybrid) / (maxHybrid - minHybrid)
       const red = Math.round(RAMP_RED_BASE + (1 - intensity) * RAMP_RED_RANGE)
@@ -108,7 +139,7 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
     ctx.font = TITLE_FONT
     ctx.textAlign = 'center'
     ctx.fillText(
-      `Hybrid scores (${documents.length} docs)`,
+      `Hybrid scores (${plottableDocuments.length} plotted / ${documents.length} docs)`,
       CHART_WIDTH / 2,
       16,
     )
@@ -116,13 +147,31 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
 
   return (
     <S.ChartFrame>
-      <canvas
-        ref={canvasRef}
-        width={CHART_WIDTH}
-        height={CHART_HEIGHT}
-        style={{ width: CHART_WIDTH, height: CHART_HEIGHT }}
-        data-testid="hybrid-score-chart"
-      />
+      <S.ChartCanvasFrame>
+        <canvas
+          ref={canvasRef}
+          width={CHART_WIDTH}
+          height={CHART_HEIGHT}
+          style={{ width: CHART_WIDTH, height: CHART_HEIGHT }}
+          data-testid="hybrid-score-chart"
+        />
+      </S.ChartCanvasFrame>
+      <S.DocumentList aria-label="Hybrid returned documents">
+        <S.DocumentRow>
+          <strong>ID</strong>
+          <strong>Text</strong>
+          <strong>Vector</strong>
+          <strong>Hybrid</strong>
+        </S.DocumentRow>
+        {documents.map((document) => (
+          <S.DocumentRow key={document.id}>
+            <span>{document.id}</span>
+            <span>{scoreLabel(document.textScore)}</span>
+            <span>{scoreLabel(document.vectorScore)}</span>
+            <span>{scoreLabel(document.hybridScore)}</span>
+          </S.DocumentRow>
+        ))}
+      </S.DocumentList>
     </S.ChartFrame>
   )
 }

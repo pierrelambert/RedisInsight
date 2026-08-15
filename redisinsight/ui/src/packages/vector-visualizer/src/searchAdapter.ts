@@ -1068,9 +1068,9 @@ const toHybridDocument = (
   const hybridScore = asNumber(recordValue(record, HYBRID_SCORE_FIELD))
   if (
     !documentId ||
-    textScore === undefined ||
-    vectorScore === undefined ||
-    hybridScore === undefined
+    (textScore === undefined &&
+      vectorScore === undefined &&
+      hybridScore === undefined)
   )
     return undefined
   return {
