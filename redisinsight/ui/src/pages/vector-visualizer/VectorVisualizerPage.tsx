@@ -325,6 +325,11 @@ const NativeHeader = styled(Row)`
   min-inline-size: 0;
 `
 
+const HeaderRightAction = styled(Row)`
+  flex: 0 0 auto;
+  margin-left: auto;
+`
+
 const BreadcrumbLink = styled.button`
   display: inline-flex;
   align-items: center;
@@ -3163,12 +3168,6 @@ export const VectorVisualizerPage = () => {
           </Row>
         </Col>
         <Row align="center" gap="s" wrap>
-          {source.kind === 'search-index' && (
-            <ViewIndexButton
-              isActive={isIndexPanelOpen}
-              onClick={() => setIsIndexPanelOpen((open) => !open)}
-            />
-          )}
           <Button
             disabled={
               !cliSettings.cliClientUuid ||
@@ -3190,6 +3189,14 @@ export const VectorVisualizerPage = () => {
             {t('vectorVisualizer.page.noCommandOnOpen')}
           </Text>
         </Row>
+        {source.kind === 'search-index' && (
+          <HeaderRightAction align="center">
+            <ViewIndexButton
+              isActive={isIndexPanelOpen}
+              onClick={() => setIsIndexPanelOpen((open) => !open)}
+            />
+          </HeaderRightAction>
+        )}
       </NativeHeader>
       <ModeHeader
         align="center"
@@ -3204,6 +3211,7 @@ export const VectorVisualizerPage = () => {
         />
       </ModeHeader>
       <VectorVisualizerWorkspace
+        resultsMode={isIndexPanelOpen ? 'expanded' : 'default'}
         additional={additionalWorkflowPanel}
         controls={
           <VectorVisualizerControls

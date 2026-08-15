@@ -5,4 +5,5 @@ export interface VectorVisualizerWorkspaceProps {
   additional?: ReactNode
   visualization: ReactNode
   results: ReactNode
+  resultsMode?: 'default' | 'expanded'
 }

@@ -2,7 +2,9 @@ import type React from 'react'
 import type { HTMLAttributes } from 'react'
 import styled from 'styled-components'
 
-export const Workspace = styled.main<HTMLAttributes<HTMLElement>>`
+export const Workspace = styled.main<
+  HTMLAttributes<HTMLElement> & { $resultsMode: 'default' | 'expanded' }
+>`
   display: grid;
   /* The visual contract's 200–280px / 280–360px desktop bands in RI tokens. */
   grid-template-columns:
@@ -11,10 +13,10 @@ export const Workspace = styled.main<HTMLAttributes<HTMLElement>>`
         ${({ theme }) => theme.core.space.space300}
     )
     minmax(0, 1fr)
-    calc(
-      ${({ theme }) => theme.core.space.space800} * 4 +
-        ${({ theme }) => theme.core.space.space500}
-    );
+    ${({ $resultsMode, theme }) =>
+      $resultsMode === 'expanded'
+        ? `minmax(calc(${theme.core.space.space800} * 6 + ${theme.core.space.space500}), max-content)`
+        : `calc(${theme.core.space.space800} * 4 + ${theme.core.space.space500})`};
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
     'controls visualization results'
@@ -31,7 +33,11 @@ export const Workspace = styled.main<HTMLAttributes<HTMLElement>>`
     transition: none;
   }
 ` as unknown as React.FC<
-  React.PropsWithChildren<React.HTMLAttributes<HTMLElement>>
+  React.PropsWithChildren<
+    React.HTMLAttributes<HTMLElement> & {
+      $resultsMode: 'default' | 'expanded'
+    }
+  >
 >
 
 export const ControlsRegion = styled.div`

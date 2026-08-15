@@ -4,7 +4,7 @@ import { render, screen } from 'uiSrc/utils/test-utils'
 import { VectorVisualizerWorkspace } from './VectorVisualizerWorkspace'
 
 describe('VectorVisualizerWorkspace', () => {
-  const renderComponent = () =>
+  const renderComponent = (resultsMode?: 'default' | 'expanded') =>
     render(
       <VectorVisualizerWorkspace
         controls={
@@ -25,6 +25,7 @@ describe('VectorVisualizerWorkspace', () => {
             Additional workflows
           </section>
         }
+        resultsMode={resultsMode}
       />,
     )
 
@@ -71,5 +72,14 @@ describe('VectorVisualizerWorkspace', () => {
     expect(visualizationRegion).not.toContainElement(additionalRegion)
     expect(controlsRegion).not.toContainElement(additionalRegion)
     expect(resultsRegion).not.toContainElement(additionalRegion)
+  })
+
+  it('marks the workspace when the results panel needs expanded width', () => {
+    renderComponent('expanded')
+
+    expect(screen.getByTestId('vector-visualizer-workspace')).toHaveAttribute(
+      'data-results-mode',
+      'expanded',
+    )
   })
 })

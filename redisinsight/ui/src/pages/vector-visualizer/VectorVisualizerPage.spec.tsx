@@ -388,10 +388,18 @@ describe('VectorVisualizerPage', () => {
     expect(screen.getByTestId('view-index-panel')).toHaveTextContent(
       'idx-products',
     )
+    expect(screen.getByTestId('vector-visualizer-workspace')).toHaveAttribute(
+      'data-results-mode',
+      'expanded',
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Close index panel' }))
 
     expect(screen.queryByTestId('view-index-panel')).not.toBeInTheDocument()
+    expect(screen.getByTestId('vector-visualizer-workspace')).toHaveAttribute(
+      'data-results-mode',
+      'default',
+    )
   })
 
   it('samples a Search source only after explicit action and keeps IDs-only selection state without retaining vectors in view state', async () => {

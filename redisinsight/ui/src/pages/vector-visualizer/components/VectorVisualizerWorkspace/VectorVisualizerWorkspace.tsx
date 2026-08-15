@@ -8,10 +8,13 @@ export const VectorVisualizerWorkspace = ({
   additional,
   visualization,
   results,
+  resultsMode = 'default',
 }: VectorVisualizerWorkspaceProps) => (
   <S.Workspace
     aria-label="Vector visualizer workspace"
     data-testid="vector-visualizer-workspace"
+    data-results-mode={resultsMode}
+    $resultsMode={resultsMode}
   >
     <S.ControlsRegion data-testid="vector-visualizer-controls-region">
       {controls}
