@@ -69,6 +69,7 @@ import type {
   VectorMetric,
   VisualizerStatus,
 } from 'uiSrc/packages/vector-visualizer/src/contracts'
+import { redisSimilarityFromDistance } from 'uiSrc/packages/vector-visualizer/src/metrics'
 import type { SelectionRow } from 'uiSrc/packages/vector-visualizer/src/selection/selection'
 import type { SensitivityResult } from 'uiSrc/packages/vector-visualizer/src/tune/Tune'
 import {
@@ -127,11 +128,55 @@ import { HybridScoreChart } from './components/HybridScoreChart'
 const DBSCAN_COLOR_BY_VALUE = '__dbscan_clusters__'
 const DBSCAN_MIN_POINTS = 5
 const DBSCAN_K = 5
+const AGGREGATE_COUNT_ALIAS = 'count'
+const AGGREGATE_BEST_DISTANCE_ALIAS = 'best_distance'
+const AGGREGATE_AVERAGE_DISTANCE_ALIAS = 'avg_distance'
+const AGGREGATE_WORST_DISTANCE_ALIAS = 'worst_distance'
 
 const vectorToRedisBlobArgument = (vector: Float32Array): Uint8Array =>
   new Uint8Array(vector.buffer, vector.byteOffset, vector.byteLength)
 
 const quoteCliToken = (value: string): string => JSON.stringify(value)
+
+const formatAggregateMetricValue = (
+  value: string | number | undefined,
+  metric: VectorMetric | 'unknown',
+): string | undefined => {
+  const numericValue =
+    typeof value === 'number' ? value : Number.parseFloat(value ?? '')
+  if (!Number.isFinite(numericValue)) return undefined
+
+  const displayValue =
+    metric === 'cosine'
+      ? redisSimilarityFromDistance(numericValue)
+      : numericValue
+
+  return displayValue.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+const aggregateMetricLabels = (metric: VectorMetric | 'unknown') => {
+  if (metric === 'cosine') {
+    return {
+      best: 'Best similarity',
+      average: 'Average similarity',
+      worst: 'Worst similarity',
+    }
+  }
+
+  if (metric === 'l2') {
+    return {
+      best: 'Lowest distance',
+      average: 'Average distance',
+      worst: 'Highest distance',
+    }
+  }
+
+  return {
+    best: 'Minimum metric',
+    average: 'Average metric',
+    worst: 'Maximum metric',
+  }
+}
 
 const buildCopyableQuery = (
   source: VectorDataSourceRef,
@@ -1106,8 +1151,6 @@ export const VectorVisualizerPage = () => {
   )
   const [altQuality, setAltQuality] = useState<LayoutQuality>()
   const [aggregateGroupByField, setAggregateGroupByField] = useState('')
-  const [aggregateReduceFunction, setAggregateReduceFunction] =
-    useState('COUNT')
 
   const [advanced, setAdvanced] = useState<{
     status:
@@ -1631,14 +1674,23 @@ export const VectorVisualizerPage = () => {
           queryMode === 'aggregate'
             ? [
                 {
-                  function: aggregateReduceFunction,
-                  alias:
-                    aggregateReduceFunction.toLowerCase() === 'count'
-                      ? 'count'
-                      : `${aggregateReduceFunction.toLowerCase()}_value`,
-                  ...(aggregateReduceFunction !== 'COUNT'
-                    ? { field: '__vv_metric' }
-                    : {}),
+                  function: 'COUNT',
+                  alias: AGGREGATE_COUNT_ALIAS,
+                },
+                {
+                  function: 'MIN',
+                  field: '__vv_metric',
+                  alias: AGGREGATE_BEST_DISTANCE_ALIAS,
+                },
+                {
+                  function: 'AVG',
+                  field: '__vv_metric',
+                  alias: AGGREGATE_AVERAGE_DISTANCE_ALIAS,
+                },
+                {
+                  function: 'MAX',
+                  field: '__vv_metric',
+                  alias: AGGREGATE_WORST_DISTANCE_ALIAS,
                 },
               ]
             : undefined,
@@ -2286,21 +2338,10 @@ export const VectorVisualizerPage = () => {
                 style={{ width: 160 }}
               />
             </Row>
-            <Row align="center" gap="s">
-              <Text size="S">REDUCE</Text>
-              <select
-                value={aggregateReduceFunction}
-                onChange={(event) =>
-                  setAggregateReduceFunction(event.target.value)
-                }
-              >
-                <option value="COUNT">COUNT</option>
-                <option value="AVG">AVG</option>
-                <option value="SUM">SUM</option>
-                <option value="MIN">MIN</option>
-                <option value="MAX">MAX</option>
-              </select>
-            </Row>
+            <Text color="subdued" size="XS">
+              Returns count plus best, average, and worst similarity within the
+              bounded query result set.
+            </Text>
           </Col>
         )}
         {sourceKind === 'search-index' &&
@@ -2546,25 +2587,79 @@ export const VectorVisualizerPage = () => {
                 <Title component="h3" size="S">
                   Aggregate groups
                 </Title>
-                <Text color="subdued" size="XS">
-                  {aggregateResult.groups.length} of{' '}
-                  {aggregateResult.totalGroups} groups
-                </Text>
+                <Col align="end" gap="xxs">
+                  <Text color="subdued" size="XS">
+                    {aggregateResult.groups.length} of{' '}
+                    {aggregateResult.totalGroups} groups
+                  </Text>
+                  <Text color="subdued" size="XS">
+                    grouped within returned top-k query results
+                  </Text>
+                </Col>
               </Row>
               <Row gap="s" wrap>
-                {aggregateResult.groups.map((group, index) => (
-                  <Col
-                    aria-label={`Aggregate group ${index + 1}`}
-                    gap="xs"
-                    key={`${index}-${JSON.stringify(group)}`}
-                  >
-                    {Object.entries(group).map(([field, value]) => (
-                      <Text key={field} size="S">
-                        {field}: {String(value)}
+                {aggregateResult.groups.map((group, index) => {
+                  const aggregateLabels = aggregateMetricLabels(
+                    sample.result.metric,
+                  )
+                  const groupField =
+                    aggregateGroupByField ||
+                    Object.keys(group).find(
+                      (field) =>
+                        ![
+                          AGGREGATE_COUNT_ALIAS,
+                          AGGREGATE_BEST_DISTANCE_ALIAS,
+                          AGGREGATE_AVERAGE_DISTANCE_ALIAS,
+                          AGGREGATE_WORST_DISTANCE_ALIAS,
+                        ].includes(field),
+                    ) ||
+                    'group'
+                  const groupValue =
+                    group[groupField] ?? group[`@${groupField}`] ?? 'Unknown'
+                  const countValue = group[AGGREGATE_COUNT_ALIAS]
+                  const bestValue = formatAggregateMetricValue(
+                    group[AGGREGATE_BEST_DISTANCE_ALIAS],
+                    sample.result.metric,
+                  )
+                  const averageValue = formatAggregateMetricValue(
+                    group[AGGREGATE_AVERAGE_DISTANCE_ALIAS],
+                    sample.result.metric,
+                  )
+                  const worstValue = formatAggregateMetricValue(
+                    group[AGGREGATE_WORST_DISTANCE_ALIAS],
+                    sample.result.metric,
+                  )
+
+                  return (
+                    <Col
+                      aria-label={`Aggregate group ${index + 1}`}
+                      gap="xs"
+                      key={`${index}-${JSON.stringify(group)}`}
+                    >
+                      <Text size="S">
+                        {groupField}: {String(groupValue)}
                       </Text>
-                    ))}
-                  </Col>
-                ))}
+                      {countValue !== undefined && (
+                        <Text size="S">{String(countValue)} returned docs</Text>
+                      )}
+                      {bestValue !== undefined && (
+                        <Text size="S">
+                          {aggregateLabels.best}: {bestValue}
+                        </Text>
+                      )}
+                      {averageValue !== undefined && (
+                        <Text size="S">
+                          {aggregateLabels.average}: {averageValue}
+                        </Text>
+                      )}
+                      {worstValue !== undefined && (
+                        <Text size="S">
+                          {aggregateLabels.worst}: {worstValue}
+                        </Text>
+                      )}
+                    </Col>
+                  )
+                })}
               </Row>
             </Col>
           )}

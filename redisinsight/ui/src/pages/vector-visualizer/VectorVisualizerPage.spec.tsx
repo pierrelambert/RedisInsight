@@ -916,7 +916,21 @@ describe('VectorVisualizerPage', () => {
         response = searchRowsWithFields(...rows)
       } else if (command.includes(serializeNativeArgument('AGGREGATE'))) {
         response = [
-          [1, ['brand', 'Nord', 'count', 2]],
+          [
+            1,
+            [
+              'brand',
+              'Nord',
+              'count',
+              2,
+              'best_distance',
+              0.05,
+              'avg_distance',
+              0.1,
+              'worst_distance',
+              0.16,
+            ],
+          ],
           ['Total profile time', '1.4'],
         ]
       } else if (command.includes(serializeNativeArgument('HYBRID'))) {
@@ -976,6 +990,24 @@ describe('VectorVisualizerPage', () => {
     expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
       'brand: Nord',
     )
+    expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
+      '2 returned docs',
+    )
+    expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
+      'Best similarity: 0.95',
+    )
+    expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
+      'Average similarity: 0.9',
+    )
+    expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
+      'Worst similarity: 0.84',
+    )
+    expect(screen.getByLabelText('Aggregate result groups')).toHaveTextContent(
+      'grouped within returned top-k query results',
+    )
+    expect(
+      screen.getByLabelText('Aggregate result groups'),
+    ).not.toHaveTextContent('max_value')
     expect(
       screen.queryByRole('heading', { name: 'Neighbors' }),
     ).not.toBeInTheDocument()
