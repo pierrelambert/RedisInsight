@@ -957,7 +957,10 @@ describe('native Vector Visualizer query orchestration', () => {
       const knnCount = Number(plan.arguments[knnIndex + 1])
       expect(
         plan.arguments.slice(knnIndex + 2, knnIndex + 2 + knnCount),
-      ).toEqual(['K', '10', 'YIELD_SCORE_AS', 'vector_score'])
+      ).toEqual(['K', '10'])
+      expect(
+        plan.arguments.slice(knnIndex + 2 + knnCount, knnIndex + 4 + knnCount),
+      ).toEqual(['YIELD_SCORE_AS', 'vector_score'])
       const combineIndex = plan.arguments.indexOf('COMBINE')
       const combineCount = Number(plan.arguments[combineIndex + 2])
       expect(

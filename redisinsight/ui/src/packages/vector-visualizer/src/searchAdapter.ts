@@ -945,14 +945,14 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
       knnArgs.push('EF_RUNTIME', String(input.efRuntime))
     if (input.shardKRatio !== undefined)
       knnArgs.push('SHARD_K_RATIO', String(input.shardKRatio))
-    knnArgs.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
     args.push('KNN', String(knnArgs.length), ...knnArgs)
+    args.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
   } else {
     const rangeArgs: string[] = ['RADIUS', String(input.radius ?? 0.5)]
     if (input.epsilon !== undefined)
       rangeArgs.push('EPSILON', String(input.epsilon))
-    rangeArgs.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
     args.push('RANGE', String(rangeArgs.length), ...rangeArgs)
+    args.push('YIELD_SCORE_AS', HYBRID_VECTOR_SCORE_FIELD)
   }
 
   // COMBINE clause

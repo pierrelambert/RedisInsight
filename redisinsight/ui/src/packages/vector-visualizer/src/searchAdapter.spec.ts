@@ -745,11 +745,25 @@ describe('planHybridQuery', () => {
     const knnIndex = result.arguments.indexOf('KNN')
     expect(result.arguments.slice(knnIndex, knnIndex + 8)).toEqual([
       'KNN',
-      '6',
+      '4',
       'K',
       '50',
       'EF_RUNTIME',
       '200',
+      'YIELD_SCORE_AS',
+      'vector_score',
+    ])
+  })
+
+  it('builds KNN without EF_RUNTIME using the nargs convention', () => {
+    const result = planHybridQuery(baseHybridInput)
+
+    const knnIndex = result.arguments.indexOf('KNN')
+    expect(result.arguments.slice(knnIndex, knnIndex + 6)).toEqual([
+      'KNN',
+      '2',
+      'K',
+      '50',
       'YIELD_SCORE_AS',
       'vector_score',
     ])
@@ -765,7 +779,7 @@ describe('planHybridQuery', () => {
     const rangeIndex = result.arguments.indexOf('RANGE')
     expect(result.arguments.slice(rangeIndex, rangeIndex + 6)).toEqual([
       'RANGE',
-      '4',
+      '2',
       'RADIUS',
       '0.5',
       'YIELD_SCORE_AS',
@@ -784,7 +798,7 @@ describe('planHybridQuery', () => {
     const rangeIndex = result.arguments.indexOf('RANGE')
     expect(result.arguments.slice(rangeIndex, rangeIndex + 8)).toEqual([
       'RANGE',
-      '6',
+      '4',
       'RADIUS',
       '0.5',
       'EPSILON',
