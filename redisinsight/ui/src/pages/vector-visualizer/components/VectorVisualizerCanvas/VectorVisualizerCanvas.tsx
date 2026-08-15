@@ -1,4 +1,4 @@
-import React, { useId, useRef } from 'react'
+import React, { useId } from 'react'
 
 import { Button } from 'uiSrc/components/base/forms/buttons'
 import { Text } from 'uiSrc/components/base/text'
@@ -37,7 +37,6 @@ export const VectorVisualizerModeTabs = ({
 }: VectorVisualizerModeTabsProps) => {
   const generatedId = useId()
   const resolvedIdPrefix = idPrefix ?? `vector-visualizer-${generatedId}`
-  const tabListRef = useRef<HTMLDivElement>(null)
 
   const getTabId = (canvasMode: VectorVisualizerCanvasMode) =>
     `${resolvedIdPrefix}-${canvasMode}-tab`
@@ -46,11 +45,7 @@ export const VectorVisualizerModeTabs = ({
 
   const selectMode = (nextMode: VectorVisualizerCanvasMode) => {
     onModeChange(nextMode)
-    tabListRef.current
-      ?.querySelector<HTMLButtonElement>(
-        `[data-vector-visualizer-mode="${nextMode}"]`,
-      )
-      ?.focus()
+    document.getElementById(getTabId(nextMode))?.focus()
   }
 
   const handleTabKeyDown = (
@@ -75,7 +70,7 @@ export const VectorVisualizerModeTabs = ({
 
   return (
     <S.ModeChrome align="center" gap="xs">
-      <S.TabList ref={tabListRef} role="tablist">
+      <S.TabList role="tablist">
         {vectorVisualizerCanvasModes.map((canvasMode) => {
           const label = modeLabels[canvasMode]
           const isActive = canvasMode === mode
@@ -84,14 +79,12 @@ export const VectorVisualizerModeTabs = ({
             <S.ModeTab
               aria-controls={getPanelId(canvasMode)}
               aria-selected={isActive}
-              $isActive={isActive}
               data-vector-visualizer-mode={canvasMode}
               id={getTabId(canvasMode)}
+              isSelected={isActive}
               key={canvasMode}
               role="tab"
-              size="s"
               tabIndex={isActive ? 0 : -1}
-              variant={isActive ? 'primary' : 'secondary-ghost'}
               onClick={() => selectMode(canvasMode)}
               onKeyDown={(event) => handleTabKeyDown(event, canvasMode)}
             >

@@ -1,7 +1,7 @@
-import type { HTMLAttributes, RefAttributes } from 'react'
+import type { HTMLAttributes } from 'react'
 import styled from 'styled-components'
 
-import { Button } from 'uiSrc/components/base/forms/buttons'
+import { ButtonGroup } from 'uiSrc/components/base/forms/button-group/ButtonGroup'
 import { Col, Row } from 'uiSrc/components/base/layout/flex'
 
 export const Canvas = styled(Col)`
@@ -32,31 +32,12 @@ export const ModeChrome = styled(Row)`
   min-width: 0;
 `
 
-export const TabList = styled.div<
-  HTMLAttributes<HTMLDivElement> & RefAttributes<HTMLDivElement>
->`
-  display: flex;
+export const TabList = styled(ButtonGroup)<HTMLAttributes<HTMLDivElement>>`
   flex: 1 1 auto;
   min-width: 0;
-  gap: ${({ theme }) => theme.core.space.space025};
 `
 
-export const ModeTab = styled(Button)<{ $isActive: boolean }>`
-  border-color: ${({ $isActive, theme }) =>
-    $isActive
-      ? theme.semantic.color.border.informative300
-      : theme.semantic.color.border.neutral500};
-  background-color: ${({ $isActive, theme }) =>
-    $isActive ? theme.semantic.color.background.informative300 : 'transparent'};
-  color: ${({ $isActive, theme }) =>
-    $isActive
-      ? theme.semantic.color.text.primary700
-      : theme.semantic.color.text.neutral700};
-  box-shadow: ${({ $isActive, theme }) =>
-    $isActive
-      ? `inset 0 -${theme.core.space.space025} 0 ${theme.semantic.color.border.informative300}`
-      : 'none'};
-`
+export const ModeTab = styled(ButtonGroup.Button)``
 
 export const UtilityActions = styled(Row)`
   flex: 0 0 auto;
