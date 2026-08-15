@@ -326,6 +326,10 @@ const NativeHeader = styled(Row)`
   min-inline-size: 0;
 `
 
+const HeaderTitleLine = styled(Row)`
+  min-inline-size: 0;
+`
+
 const HeaderRightAction = styled(Row)`
   flex: 0 0 auto;
   margin-left: auto;
@@ -3116,42 +3120,50 @@ export const VectorVisualizerPage = () => {
 
   return (
     <NativeHost data-testid="vector-visualizer-native-host">
-      {source.kind === 'search-index' && (
-        <Breadcrumbs.Compose
-          aria-label={t('vectorSearch.query.breadcrumb.ariaLabel')}
-          data-testid="vector-visualizer-breadcrumb-search-indexes"
-        >
-          <Breadcrumbs.List>
-            <Breadcrumbs.Item>
-              <BreadcrumbLink
-                type="button"
-                onClick={navigateToIndexes}
-                data-testid="vector-visualizer-breadcrumb-search-indexes-link"
-              >
-                <RiIcon type="ChevronLeftIcon" size="S" />
-                <Title size="M" color="primary">
-                  {t('vectorSearch.query.breadcrumb.indexes')}
-                </Title>
-              </BreadcrumbLink>
-            </Breadcrumbs.Item>
-            <Breadcrumbs.Item>
-              <Breadcrumbs.Separator>
-                <SlashSeparator>/</SlashSeparator>
-              </Breadcrumbs.Separator>
-            </Breadcrumbs.Item>
-            <Breadcrumbs.Item>
-              <Title size="M" color="primary">
-                {source.index}
-              </Title>
-            </Breadcrumbs.Item>
-          </Breadcrumbs.List>
-        </Breadcrumbs.Compose>
-      )}
-      <NativeHeader align="center" gap="m" justify="between" wrap>
+      <NativeHeader
+        align="center"
+        data-testid="vector-visualizer-native-header"
+        gap="m"
+        justify="between"
+        wrap
+      >
         <Col gap="xs">
-          <Title component="h1" size="M">
-            {t('vectorVisualizer.page.title')}
-          </Title>
+          <HeaderTitleLine align="center" gap="s" wrap>
+            {source.kind === 'search-index' && (
+              <Breadcrumbs.Compose
+                aria-label={t('vectorSearch.query.breadcrumb.ariaLabel')}
+                data-testid="vector-visualizer-breadcrumb-search-indexes"
+              >
+                <Breadcrumbs.List>
+                  <Breadcrumbs.Item>
+                    <BreadcrumbLink
+                      type="button"
+                      onClick={navigateToIndexes}
+                      data-testid="vector-visualizer-breadcrumb-search-indexes-link"
+                    >
+                      <RiIcon type="ChevronLeftIcon" size="S" />
+                      <Title size="M" color="primary">
+                        {t('vectorSearch.query.breadcrumb.indexes')}
+                      </Title>
+                    </BreadcrumbLink>
+                  </Breadcrumbs.Item>
+                  <Breadcrumbs.Item>
+                    <Breadcrumbs.Separator>
+                      <SlashSeparator>/</SlashSeparator>
+                    </Breadcrumbs.Separator>
+                  </Breadcrumbs.Item>
+                  <Breadcrumbs.Item>
+                    <Title size="M" color="primary">
+                      {source.index}
+                    </Title>
+                  </Breadcrumbs.Item>
+                </Breadcrumbs.List>
+              </Breadcrumbs.Compose>
+            )}
+            <Title component="h1" size="M">
+              {t('vectorVisualizer.page.title')}
+            </Title>
+          </HeaderTitleLine>
           <Row
             align="center"
             data-testid="vector-visualizer-page-context"

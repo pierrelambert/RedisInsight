@@ -279,6 +279,9 @@ describe('VectorVisualizerPage', () => {
     expect(
       screen.getByTestId('vector-visualizer-breadcrumb-search-indexes-link'),
     ).toHaveTextContent('Indexes')
+    expect(
+      screen.getByTestId('vector-visualizer-native-header'),
+    ).toHaveTextContent('Indexes/idx:bikes_vssVector Visualizer')
   })
 
   it('preserves the one-shot source when the page is mounted through a lazy route', async () => {
