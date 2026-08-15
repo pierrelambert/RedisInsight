@@ -48,14 +48,14 @@ export const TableRow = styled(Row)<{
   padding: 0 ${({ theme }) => theme.core.space.space100};
   border-inline-start: ${({ theme }) => theme.core.space.space025} solid
     ${({ $selected, theme }) =>
-      $selected ? theme.semantic.color.border.informative400 : 'transparent'};
+      $selected ? theme.semantic.color.border.informative300 : 'transparent'};
   background-color: ${({ $selected, theme }) =>
     $selected
-      ? theme.semantic.color.background.primary300
+      ? theme.semantic.color.background.informative300
       : theme.semantic.color.background.neutral100};
   color: ${({ $selected, theme }) =>
     $selected
-      ? theme.semantic.color.text.primary50
+      ? theme.semantic.color.text.primary700
       : theme.semantic.color.text.neutral700};
 `
 
