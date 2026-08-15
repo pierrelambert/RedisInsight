@@ -52,6 +52,10 @@ describe('HybridScoreChart', () => {
       ],
     })
 
+    expect(screen.getByTestId('hybrid-score-chart')).toHaveAttribute(
+      'data-plotted-document-count',
+      '2',
+    )
     expect(screen.getByLabelText('Hybrid returned documents')).toBeVisible()
     expect(screen.getByText('doc:vector')).toBeVisible()
     expect(screen.getByText('doc:text')).toBeVisible()

@@ -1059,7 +1059,7 @@
   "browser.vectorSet.subheader.previewingShort": "{{count}} от {{total}}",
   "vectorVisualizer.actions.cancel": "Cancel",
   "vectorVisualizer.actions.clearSelection": "Clear selection",
-  "vectorVisualizer.actions.copyQuery": "Copy query template",
+  "vectorVisualizer.actions.copyQuery": "Copy query",
   "vectorVisualizer.actions.runNeighborsForSelected": "Run neighbors for selected",
   "vectorVisualizer.actions.sampleVectors": "Sample vectors",
   "vectorVisualizer.actions.visualize": "Визуализиране",

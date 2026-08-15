@@ -15,24 +15,17 @@ const TITLE_COLOR = '#aaa'
 const AXIS_FONT = '11px sans-serif'
 const TITLE_FONT = '12px sans-serif'
 
-// Blue color ramp bounds used to encode hybrid_score intensity per dot.
-const RAMP_RED_BASE = 30
-const RAMP_RED_RANGE = 100
-const RAMP_GREEN_BASE = 60
-const RAMP_GREEN_RANGE = 100
-const RAMP_BLUE_BASE = 180
-const RAMP_BLUE_RANGE = 75
+const SCORE_CHANNELS = [
+  { key: 'textScore', label: 'Text', color: '#9ad0ff', y: 75 },
+  { key: 'vectorScore', label: 'Vector', color: '#63d8a2', y: 150 },
+  { key: 'hybridScore', label: 'Hybrid', color: '#ffb44d', y: 225 },
+] as const
 
-const isPlottable = (
-  document: HybridScoreChartDocument,
-): document is HybridScoreChartDocument & {
-  textScore: number
-  vectorScore: number
-} =>
-  document.textScore !== undefined &&
-  Number.isFinite(document.textScore) &&
-  document.vectorScore !== undefined &&
-  Number.isFinite(document.vectorScore)
+const hasScoreEvidence = (document: HybridScoreChartDocument) =>
+  SCORE_CHANNELS.some(({ key }) => {
+    const value = document[key]
+    return value !== undefined && Number.isFinite(value)
+  })
 
 const scoreLabel = (value: number | undefined) =>
   value === undefined || !Number.isFinite(value) ? (
@@ -42,9 +35,10 @@ const scoreLabel = (value: number | undefined) =>
   )
 
 /**
- * Minimal Canvas 2D scatter chart plotting FT.HYBRID results: text_score on
- * the x-axis, vector_score on the y-axis, and hybrid_score encoded as dot
- * color intensity. No external charting library is used.
+ * Minimal Canvas 2D score-channel plot for FT.HYBRID results. Redis can return
+ * text_score, vector_score, and hybrid_score on different rows depending on
+ * how the hybrid operator merged its candidates, so every available score
+ * channel is plotted instead of requiring complete text/vector pairs.
  */
 export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
   documents,
@@ -53,7 +47,7 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const plottableDocuments = documents.filter(isPlottable)
+    const scoreDocuments = documents.filter(hasScoreEvidence)
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -64,82 +58,62 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
     ctx.scale(dpr, dpr)
 
     ctx.clearRect(0, 0, CHART_WIDTH, CHART_HEIGHT)
-    if (!plottableDocuments.length) {
+    if (!scoreDocuments.length) {
       ctx.fillStyle = TITLE_COLOR
       ctx.font = TITLE_FONT
       ctx.textAlign = 'center'
-      ctx.fillText('No complete text/vector score pairs', CHART_WIDTH / 2, 150)
+      ctx.fillText('No Hybrid score channels returned', CHART_WIDTH / 2, 150)
       return
     }
 
-    const textScores = plottableDocuments.map((doc) => doc.textScore)
-    const vectorScores = plottableDocuments.map((doc) => doc.vectorScore)
-    const hybridScores = plottableDocuments.flatMap((doc) =>
-      doc.hybridScore === undefined ? [] : [doc.hybridScore],
-    )
-    const minText = Math.min(...textScores)
-    const maxText = Math.max(...textScores)
-    const minVector = Math.min(...vectorScores)
-    const maxVector = Math.max(...vectorScores)
-    const minHybrid = hybridScores.length ? Math.min(...hybridScores) : 0
-    const maxHybrid = hybridScores.length ? Math.max(...hybridScores) : 0
-
     const plotWidth = CHART_WIDTH - CHART_PADDING * 2
-    const plotHeight = CHART_HEIGHT - CHART_PADDING * 2
-
-    const scaleX = (value: number) =>
-      maxText === minText
+    const scaleX = (value: number, values: number[]) => {
+      const minValue = Math.min(...values)
+      const maxValue = Math.max(...values)
+      return maxValue === minValue
         ? CHART_PADDING + plotWidth / 2
-        : CHART_PADDING + ((value - minText) / (maxText - minText)) * plotWidth
-
-    const scaleY = (value: number) =>
-      maxVector === minVector
-        ? CHART_PADDING + plotHeight / 2
         : CHART_PADDING +
-          plotHeight -
-          ((value - minVector) / (maxVector - minVector)) * plotHeight
+            ((value - minValue) / (maxValue - minValue)) * plotWidth
+    }
 
     ctx.strokeStyle = AXIS_COLOR
     ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(CHART_PADDING, CHART_PADDING)
-    ctx.lineTo(CHART_PADDING, CHART_HEIGHT - CHART_PADDING)
-    ctx.lineTo(CHART_WIDTH - CHART_PADDING, CHART_HEIGHT - CHART_PADDING)
-    ctx.stroke()
-
-    ctx.fillStyle = AXIS_COLOR
     ctx.font = AXIS_FONT
-    ctx.textAlign = 'center'
-    ctx.fillText('text_score', CHART_WIDTH / 2, CHART_HEIGHT - 8)
-    ctx.save()
-    ctx.translate(12, CHART_HEIGHT / 2)
-    ctx.rotate(-Math.PI / 2)
-    ctx.fillText('vector_score', 0, 0)
-    ctx.restore()
-
-    plottableDocuments.forEach((doc) => {
-      const x = scaleX(doc.textScore)
-      const y = scaleY(doc.vectorScore)
-      const intensity =
-        doc.hybridScore === undefined || maxHybrid === minHybrid
-          ? 0.5
-          : (doc.hybridScore - minHybrid) / (maxHybrid - minHybrid)
-      const red = Math.round(RAMP_RED_BASE + (1 - intensity) * RAMP_RED_RANGE)
-      const green = Math.round(
-        RAMP_GREEN_BASE + (1 - intensity) * RAMP_GREEN_RANGE,
-      )
-      const blue = Math.round(RAMP_BLUE_BASE + intensity * RAMP_BLUE_RANGE)
-      ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`
+    SCORE_CHANNELS.forEach(({ key, label, color, y }) => {
+      const values = documents.flatMap((document) => {
+        const value = document[key]
+        return value === undefined || !Number.isFinite(value) ? [] : [value]
+      })
+      ctx.strokeStyle = AXIS_COLOR
       ctx.beginPath()
-      ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2)
-      ctx.fill()
+      ctx.moveTo(CHART_PADDING, y)
+      ctx.lineTo(CHART_WIDTH - CHART_PADDING, y)
+      ctx.stroke()
+      ctx.fillStyle = AXIS_COLOR
+      ctx.textAlign = 'left'
+      ctx.fillText(label, CHART_PADDING, y - 10)
+      if (!values.length) {
+        ctx.textAlign = 'right'
+        ctx.fillText('not returned', CHART_WIDTH - CHART_PADDING, y - 10)
+        return
+      }
+      documents.forEach((document, index) => {
+        const value = document[key]
+        if (value === undefined || !Number.isFinite(value)) return
+        const x = scaleX(value, values)
+        const jitter = ((index % 5) - 2) * 3
+        ctx.fillStyle = color
+        ctx.beginPath()
+        ctx.arc(x, y + jitter, DOT_RADIUS, 0, Math.PI * 2)
+        ctx.fill()
+      })
     })
 
     ctx.fillStyle = TITLE_COLOR
     ctx.font = TITLE_FONT
     ctx.textAlign = 'center'
     ctx.fillText(
-      `Hybrid scores (${plottableDocuments.length} plotted / ${documents.length} docs)`,
+      `Hybrid score channels (${scoreDocuments.length} docs with evidence / ${documents.length} returned)`,
       CHART_WIDTH / 2,
       16,
     )
@@ -154,6 +128,9 @@ export const HybridScoreChart: React.FC<HybridScoreChartProps> = ({
           height={CHART_HEIGHT}
           style={{ width: CHART_WIDTH, height: CHART_HEIGHT }}
           data-testid="hybrid-score-chart"
+          data-plotted-document-count={
+            documents.filter(hasScoreEvidence).length
+          }
         />
       </S.ChartCanvasFrame>
       <S.DocumentList aria-label="Hybrid returned documents">
