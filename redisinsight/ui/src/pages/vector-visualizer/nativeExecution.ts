@@ -40,18 +40,28 @@ type NativeCommandFailureCategory =
 const commandFailure = (category: NativeCommandFailureCategory) =>
   new Error(category)
 
-const toBytes = (argument: RedisArgument) =>
-  typeof argument === 'string' ? new TextEncoder().encode(argument) : argument
+const SAFE_TEXT_ARGUMENT = /^[^\s"\\]+$/
 
 /**
  * The CLI backend parses double-quoted `\\xNN` sequences into the original
- * bytes. Encoding every argument makes token boundaries and binary values
- * unambiguous without retaining a printable copy of sensitive vector data.
+ * bytes. Keep readable command tokens readable for Workbench/profiler users,
+ * while encoding only binary vector blobs as escaped bytes.
  */
-export const serializeNativeArgument = (argument: RedisArgument) =>
-  `"${[...toBytes(argument)]
+export const serializeNativeArgument = (argument: RedisArgument) => {
+  if (typeof argument === 'string') {
+    if (SAFE_TEXT_ARGUMENT.test(argument)) return argument
+    return `"${argument
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\n', '\\n')
+      .replaceAll('\r', '\\r')
+      .replaceAll('\t', '\\t')}"`
+  }
+
+  return `"${[...argument]
     .map((byte) => `\\x${byte.toString(16).padStart(2, '0')}`)
     .join('')}"`
+}
 
 export const serializeNativeCommandPlan = (plan: CommandPlan) => {
   const command = plan.command.toUpperCase()

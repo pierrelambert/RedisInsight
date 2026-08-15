@@ -793,7 +793,6 @@ describe('VectorVisualizerPage', () => {
   it('preserves a binary Vector Set member through VEMB and documented VLINKS layers', async () => {
     const member = 'member\\x00\\xff'
     const target = 'target\\x00\\xfe'
-    const encodedTruth = '"\\x54\\x52\\x55\\x54\\x48"'
     const commands: string[] = []
     jest.spyOn(apiService, 'post').mockImplementation((_, body) => {
       const command = (body as { command: string }).command
@@ -811,7 +810,7 @@ describe('VectorVisualizerPage', () => {
                 : command.startsWith('VGETATTR')
                   ? '{"category":"Documentation","published":true}'
                   : command.startsWith('VSIM')
-                    ? command.endsWith(encodedTruth)
+                    ? command.endsWith('TRUTH')
                       ? [member, 1]
                       : [member, 0.99]
                     : command.startsWith('VLINKS')
@@ -874,9 +873,7 @@ describe('VectorVisualizerPage', () => {
     expect(
       commands.filter((command) => command.startsWith('VSIM')),
     ).toHaveLength(2)
-    expect(commands.some((command) => command.endsWith(encodedTruth))).toBe(
-      true,
-    )
+    expect(commands.some((command) => command.endsWith('TRUTH'))).toBe(true)
     openAdditionalWorkflow('Advanced')
     fireEvent.click(
       screen.getByRole('button', { name: 'Load selected VLINKS topology' }),

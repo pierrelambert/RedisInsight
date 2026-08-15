@@ -14,9 +14,40 @@ const plan = (overrides: Partial<CommandPlan> = {}): CommandPlan => ({
 })
 
 describe('native Vector Visualizer read-only executor', () => {
-  it('serializes every argument as CLI parser-safe bytes without retaining a raw vector value', () => {
+  it('keeps text arguments readable while escaping binary vector values', () => {
     expect(serializeNativeCommandPlan(plan())).toBe(
-      'FT.INFO "\\x69\\x64\\x78\\x3a\\x70\\x72\\x6f\\x64\\x75\\x63\\x74\\x73" "\\x00\\x22\\x5c\\xff"',
+      'FT.INFO idx:products "\\x00\\x22\\x5c\\xff"',
+    )
+  })
+
+  it('quotes readable text arguments only when the CLI parser needs token boundaries', () => {
+    expect(
+      serializeNativeCommandPlan(
+        plan({
+          command: 'FT.PROFILE',
+          arguments: [
+            'kb_customer_intel',
+            'HYBRID',
+            'LIMITED',
+            'QUERY',
+            'SEARCH',
+            'midmarket policy',
+            'VSIM',
+            '@embedding',
+            '$vv_anchor',
+            'KNN',
+            '2',
+            'K',
+            '11',
+            'PARAMS',
+            '2',
+            'vv_anchor',
+            new Uint8Array([0, 34, 92, 255]),
+          ],
+        }),
+      ),
+    ).toBe(
+      'FT.PROFILE kb_customer_intel HYBRID LIMITED QUERY SEARCH "midmarket policy" VSIM @embedding $vv_anchor KNN 2 K 11 PARAMS 2 vv_anchor "\\x00\\x22\\x5c\\xff"',
     )
   })
 
@@ -36,9 +67,9 @@ describe('native Vector Visualizer read-only executor', () => {
     await expect(execute(plan({ command: 'VGETATTR' }))).rejects.not.toThrow(
       'not allowed',
     )
-    await expect(execute(plan({ command: 'FT.AGGREGATE' }))).rejects.not.toThrow(
-      'not allowed',
-    )
+    await expect(
+      execute(plan({ command: 'FT.AGGREGATE' })),
+    ).rejects.not.toThrow('not allowed')
     await expect(execute(plan({ command: 'FT.HYBRID' }))).rejects.not.toThrow(
       'not allowed',
     )
