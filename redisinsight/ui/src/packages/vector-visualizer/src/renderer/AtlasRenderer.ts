@@ -728,6 +728,14 @@ const percentileBounds = (values: number[], lo: number, hi: number) => {
   return { low, high }
 }
 
+const normalizeAxisValue = (value: number, low: number, high: number) => {
+  const span = high - low
+  if (Math.abs(span) <= Number.EPSILON) return 0.5
+  const clamped = Math.max(low, Math.min(high, value))
+  const normalized = (clamped - low) / span
+  return PLOT_INSET + normalized * (1 - PLOT_INSET * 2)
+}
+
 export const normalizeCoordinates = (coordinates: Float32Array) => {
   if (!coordinates.length) return coordinates
   const count = coordinates.length / 2
@@ -742,12 +750,10 @@ export const normalizeCoordinates = (coordinates: Float32Array) => {
       minY = Math.min(minY, coordinates[i + 1])
       maxY = Math.max(maxY, coordinates[i + 1])
     }
-    const width = maxX - minX || 1
-    const height = maxY - minY || 1
     return Float32Array.from(coordinates, (value, i) => {
-      const normalized =
-        i % 2 ? (value - minY) / height : (value - minX) / width
-      return PLOT_INSET + normalized * (1 - PLOT_INSET * 2)
+      const { low, high } =
+        i % 2 ? { low: minY, high: maxY } : { low: minX, high: maxX }
+      return normalizeAxisValue(value, low, high)
     })
   }
   const xs: number[] = []
@@ -761,9 +767,7 @@ export const normalizeCoordinates = (coordinates: Float32Array) => {
   return Float32Array.from(coordinates, (value, i) => {
     const { low, high } =
       i % 2 ? { low: yBounds.low, high: yBounds.high } : xBounds
-    const clamped = Math.max(low, Math.min(high, value))
-    const normalized = (clamped - low) / (high - low || 1)
-    return PLOT_INSET + normalized * (1 - PLOT_INSET * 2)
+    return normalizeAxisValue(value, low, high)
   })
 }
 

@@ -79,6 +79,17 @@ describe('AtlasRenderer lifecycle', () => {
     )
   })
 
+  it('centers an axis when the projection collapses to a line', () => {
+    expect(normalizeCoordinates(new Float32Array([0, 4, 10, 4]))).toEqual(
+      new Float32Array([0.06, 0.5, 0.94, 0.5]),
+    )
+    expect(
+      normalizeCoordinates(new Float32Array([4, 0, 4, 3, 4, 6, 4, 9, 4, 12])),
+    ).toEqual(
+      new Float32Array([0.5, 0.06, 0.5, 0.28, 0.5, 0.5, 0.5, 0.72, 0.5, 0.94]),
+    )
+  })
+
   it('removes input listeners and distinguishes context loss from unsupported WebGL', () => {
     const canvas = document.createElement('canvas')
     const gl = createGl()
