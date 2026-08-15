@@ -128,6 +128,7 @@ describe('Health explorers', () => {
               sampleCount: 4,
               freshness: 'fresh',
               status: 'candidate',
+              severity: 'danger',
             },
           ]}
         />
@@ -135,7 +136,7 @@ describe('Health explorers', () => {
     )
 
     const tile = screen.getByTestId('health-metric-tile-metadata-coverage')
-    expect(tile).toHaveAttribute('data-health-severity', 'notice')
+    expect(tile).toHaveAttribute('data-health-severity', 'danger')
     expect(tile).toHaveTextContent('Metadata coverage')
     expect(tile).toHaveTextContent('3 / 4')
     expect(tile).toHaveTextContent('Sampled candidate')

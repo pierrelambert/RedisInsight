@@ -47,6 +47,12 @@ describe('native vector-free evidence', () => {
     expect(
       facts.find(({ label }) => label === 'Outlier candidate rate'),
     ).toMatchObject({ sampleCount: 4, formula: expect.stringContaining('k=2') })
+    expect(facts.find(({ label }) => label === 'Dimensions')).toMatchObject({
+      severity: 'danger',
+    })
+    expect(
+      facts.find(({ label }) => label === 'Duplicate candidate rate'),
+    ).toMatchObject({ severity: 'danger' })
   })
 
   it('returns vector-free sampled drift facts with explicit provenance', () => {

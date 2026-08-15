@@ -4,7 +4,12 @@ import styled from 'styled-components'
 import { Col } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 
-export type HealthTileSeverity = 'success' | 'notice' | 'attention' | 'neutral'
+export type HealthTileSeverity =
+  | 'success'
+  | 'notice'
+  | 'attention'
+  | 'danger'
+  | 'neutral'
 
 export const EvidencePanel = styled.section`
   flex: 1;
@@ -44,7 +49,9 @@ export const MetricTile = styled.article<{ $severity: HealthTileSeverity }>`
           ? theme.semantic.color.border.notice300
           : $severity === 'attention'
             ? theme.semantic.color.text.attention500
-            : theme.semantic.color.border.neutral500};
+            : $severity === 'danger'
+              ? theme.semantic.color.text.danger500
+              : theme.semantic.color.border.neutral500};
   border-radius: ${({ theme }) => theme.components.card.borderRadius};
   background: ${({ $severity, theme }) =>
     $severity === 'success'
@@ -53,7 +60,9 @@ export const MetricTile = styled.article<{ $severity: HealthTileSeverity }>`
         ? theme.semantic.color.background.notice100
         : $severity === 'attention'
           ? theme.semantic.color.background.attention100
-          : theme.semantic.color.background.neutral100};
+          : $severity === 'danger'
+            ? theme.semantic.color.background.danger100
+            : theme.semantic.color.background.neutral100};
 ` as unknown as React.FC<
   React.PropsWithChildren<
     React.HTMLAttributes<HTMLElement> & { $severity: HealthTileSeverity }

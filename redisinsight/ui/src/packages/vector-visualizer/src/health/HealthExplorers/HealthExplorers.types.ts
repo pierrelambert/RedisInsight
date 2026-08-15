@@ -6,7 +6,12 @@ import type {
 
 export type Freshness = 'fresh' | 'stale' | 'changed-while-sampled'
 
-export type XRayFactSeverity = 'success' | 'notice' | 'attention' | 'neutral'
+export type XRayFactSeverity =
+  | 'success'
+  | 'notice'
+  | 'attention'
+  | 'danger'
+  | 'neutral'
 
 export interface XRayFact {
   label: string

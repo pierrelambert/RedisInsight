@@ -19,21 +19,35 @@ interface NativeEvidenceSample {
 }
 
 const DUPLICATE_ATTENTION_THRESHOLD = 0.1
+const DUPLICATE_DANGER_THRESHOLD = 0.5
 const DUPLICATE_NOTICE_THRESHOLD = 0.05
 const OUTLIER_ATTENTION_THRESHOLD = 0.15
+const OUTLIER_DANGER_THRESHOLD = 0.25
 const OUTLIER_NOTICE_THRESHOLD = 0.08
 const COVERAGE_ATTENTION_THRESHOLD = 0.5
 const COVERAGE_NOTICE_THRESHOLD = 0.8
+const DIMENSIONS_ATTENTION_THRESHOLD = 128
+const DIMENSIONS_DANGER_THRESHOLD = 32
 
 const rateSeverity = (
   value: number,
+  dangerAtOrAbove: number,
   attentionAbove: number,
   noticeAbove: number,
 ): XRayFactSeverity =>
-  value >= attentionAbove
-    ? 'attention'
-    : value >= noticeAbove
-      ? 'notice'
+  value >= dangerAtOrAbove
+    ? 'danger'
+    : value >= attentionAbove
+      ? 'attention'
+      : value >= noticeAbove
+        ? 'notice'
+        : 'success'
+
+const dimensionsSeverity = (dimensions: number): XRayFactSeverity =>
+  dimensions < DIMENSIONS_DANGER_THRESHOLD
+    ? 'danger'
+    : dimensions < DIMENSIONS_ATTENTION_THRESHOLD
+      ? 'attention'
       : 'success'
 
 const coverageSeverity = (value: number): XRayFactSeverity =>
@@ -91,6 +105,7 @@ export const buildNativeXRayFacts = ({
       sampleCount: sample.sampleCount,
       freshness: sampleFreshness,
       status: 'candidate',
+      severity: dimensionsSeverity(sample.dimensions),
     },
     {
       label: 'Redis source metric',
@@ -148,6 +163,7 @@ export const buildNativeXRayFacts = ({
           ? undefined
           : rateSeverity(
               rate(duplicateIds, boundedCount),
+              DUPLICATE_DANGER_THRESHOLD,
               DUPLICATE_ATTENTION_THRESHOLD,
               DUPLICATE_NOTICE_THRESHOLD,
             ),
@@ -167,6 +183,7 @@ export const buildNativeXRayFacts = ({
           ? undefined
           : rateSeverity(
               rate(outlierIds, boundedCount),
+              OUTLIER_DANGER_THRESHOLD,
               OUTLIER_ATTENTION_THRESHOLD,
               OUTLIER_NOTICE_THRESHOLD,
             ),

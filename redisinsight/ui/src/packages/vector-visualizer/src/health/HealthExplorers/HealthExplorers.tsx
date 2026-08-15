@@ -89,7 +89,9 @@ export const XRay = ({ facts }: { facts: XRayFact[] }) => (
                         ? 'success'
                         : severity === 'notice'
                           ? 'notice'
-                          : 'subdued'
+                          : severity === 'danger'
+                            ? 'danger'
+                            : 'subdued'
                   }
                   size="XS"
                 >
