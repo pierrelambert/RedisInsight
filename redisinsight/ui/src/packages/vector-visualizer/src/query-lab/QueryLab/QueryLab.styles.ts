@@ -132,9 +132,12 @@ export const NeighborButton = styled(Button)<{
   padding: ${({ theme }) => theme.core.space.space100};
   background-color: ${({ $selected, theme }) =>
     $selected
-      ? theme.semantic.color.background.primary100
+      ? theme.semantic.color.background.primary300
       : theme.semantic.color.background.neutral100};
-  color: ${({ theme }) => theme.semantic.color.text.neutral700};
+  color: ${({ $selected, theme }) =>
+    $selected
+      ? theme.semantic.color.text.primary50
+      : theme.semantic.color.text.neutral700};
 `
 
 export const RadialPlot = styled.div`
@@ -178,7 +181,12 @@ export const WaterfallRow = styled(Button)<{ $selected: boolean }>`
         ? theme.semantic.color.border.primary500
         : theme.semantic.color.border.neutral500};
   padding: ${({ theme }) => theme.core.space.space100};
-  background-color: ${({ theme }) =>
-    theme.semantic.color.background.neutral100};
-  color: ${({ theme }) => theme.semantic.color.text.neutral700};
+  background-color: ${({ $selected, theme }) =>
+    $selected
+      ? theme.semantic.color.background.primary300
+      : theme.semantic.color.background.neutral100};
+  color: ${({ $selected, theme }) =>
+    $selected
+      ? theme.semantic.color.text.primary50
+      : theme.semantic.color.text.neutral700};
 `

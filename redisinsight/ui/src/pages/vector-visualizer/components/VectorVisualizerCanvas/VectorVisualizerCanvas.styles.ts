@@ -44,8 +44,12 @@ export const TabList = styled.div<
 export const ModeTab = styled(Button)<{ $isActive: boolean }>`
   border-color: ${({ $isActive, theme }) =>
     $isActive
-      ? theme.semantic.color.border.neutral500
-      : theme.semantic.color.background.neutral100};
+      ? theme.semantic.color.border.informative400
+      : theme.semantic.color.border.neutral500};
+  box-shadow: ${({ $isActive, theme }) =>
+    $isActive
+      ? `inset 0 -${theme.core.space.space025} 0 ${theme.semantic.color.border.informative400}`
+      : 'none'};
 `
 
 export const UtilityActions = styled(Row)`

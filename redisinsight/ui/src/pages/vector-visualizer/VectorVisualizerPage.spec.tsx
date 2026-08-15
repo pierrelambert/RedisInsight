@@ -117,6 +117,24 @@ jest.mock('uiSrc/slices/hooks', () => ({
   useAppDispatch: jest.fn(() => mockDispatch),
 }))
 
+jest.mock('uiSrc/pages/vector-search/components/index-info-side-panel', () => {
+  const mockReact = require('react')
+
+  return {
+    IndexInfoSidePanel: (props) =>
+      mockReact.createElement(
+        'aside',
+        { 'data-testid': 'view-index-panel' },
+        mockReact.createElement('span', null, props.indexName),
+        mockReact.createElement(
+          'button',
+          { type: 'button', onClick: props.onClose },
+          'Close index panel',
+        ),
+      ),
+  }
+})
+
 import { useAppSelector } from 'uiSrc/slices/hooks'
 import { serializeNativeArgument } from './nativeExecution'
 import { setVectorVisualizerSource } from './nativeHandoff'
@@ -304,6 +322,26 @@ describe('VectorVisualizerPage', () => {
     expect(screen.getAllByText('Unknown candidate evidence')).not.toHaveLength(
       0,
     )
+  })
+
+  it('opens the source Search index details from the visualizer header', () => {
+    setVectorVisualizerSource({
+      kind: 'search-index',
+      index: 'idx-products',
+      vectorField: 'embedding',
+    })
+
+    render(<VectorVisualizerPage />)
+
+    fireEvent.click(screen.getByTestId('view-index-btn'))
+
+    expect(screen.getByTestId('view-index-panel')).toHaveTextContent(
+      'idx-products',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close index panel' }))
+
+    expect(screen.queryByTestId('view-index-panel')).not.toBeInTheDocument()
   })
 
   it('samples a Search source only after explicit action and keeps IDs-only selection state without retaining vectors in view state', async () => {

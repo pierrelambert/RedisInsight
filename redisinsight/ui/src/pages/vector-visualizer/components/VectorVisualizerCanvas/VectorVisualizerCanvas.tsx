@@ -91,7 +91,7 @@ export const VectorVisualizerModeTabs = ({
               role="tab"
               size="s"
               tabIndex={isActive ? 0 : -1}
-              variant="secondary-ghost"
+              variant={isActive ? 'primary' : 'secondary-ghost'}
               onClick={() => selectMode(canvasMode)}
               onKeyDown={(event) => handleTabKeyDown(event, canvasMode)}
             >

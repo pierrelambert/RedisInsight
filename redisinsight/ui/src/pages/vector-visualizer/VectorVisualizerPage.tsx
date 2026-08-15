@@ -13,6 +13,8 @@ import { Col, Row } from 'uiSrc/components/base/layout/flex'
 import { Text, Title } from 'uiSrc/components/base/text'
 import { PluginsThemeContext } from 'uiSrc/components/base/utils/pluginsThemeContext'
 import { useTranslation } from 'uiSrc/i18n'
+import { IndexInfoSidePanel } from 'uiSrc/pages/vector-search/components/index-info-side-panel'
+import { ViewIndexButton } from 'uiSrc/pages/vector-search/pages/VectorSearchQueryPage/components/view-index-button'
 import apiService from 'uiSrc/services/apiService'
 import {
   cliSettingsSelector,
@@ -1059,6 +1061,7 @@ export const VectorVisualizerPage = () => {
     'atlas' | 'neighbors' | 'selection'
   >('atlas')
   const [additionalWorkflowsOpen, setAdditionalWorkflowsOpen] = useState(false)
+  const [isIndexPanelOpen, setIsIndexPanelOpen] = useState(false)
   const [sampleBudget, setSampleBudget] = useState(DEFAULT_SAMPLE_BUDGET)
   const [projectionAlgorithm, setProjectionAlgorithm] = useState<
     'umap' | 'pca'
@@ -1259,6 +1262,10 @@ export const VectorVisualizerPage = () => {
     dispatch,
     source,
   ])
+
+  useEffect(() => {
+    if (source?.kind !== 'search-index') setIsIndexPanelOpen(false)
+  }, [source?.kind])
 
   useEffect(() => {
     disposed.current = false
@@ -2948,6 +2955,7 @@ export const VectorVisualizerPage = () => {
               aria-pressed={workflow === id}
               key={id}
               size="s"
+              variant={workflow === id ? 'primary' : 'secondary-ghost'}
               onClick={() => selectWorkflow(id)}
             >
               {workflowLabels[id]}
@@ -3064,6 +3072,12 @@ export const VectorVisualizerPage = () => {
           </Row>
         </Col>
         <Row align="center" gap="s" wrap>
+          {source.kind === 'search-index' && (
+            <ViewIndexButton
+              isActive={isIndexPanelOpen}
+              onClick={() => setIsIndexPanelOpen((open) => !open)}
+            />
+          )}
           <Button
             disabled={
               !cliSettings.cliClientUuid ||
@@ -3299,23 +3313,30 @@ export const VectorVisualizerPage = () => {
           />
         }
         results={
-          <VectorVisualizerResults
-            context={inspectorContext}
-            exactness={
-              workspaceMode === 'neighbors' ? query.exactness : 'sample-exact'
-            }
-            focusedId={selectedIds[0]}
-            provenance={inspectorProvenance}
-            rows={resultRows}
-            sourceKind={sourceKind}
-            status={resultStatus}
-            onCopyVisibleIds={copyIds}
-            onCopyFocusedId={(id) => copyIds([id])}
-            onExportFocusedResult={(row) => void exportDocuments([row])}
-            onExportVisibleResults={(rows) => void exportDocuments(rows)}
-            onResultFocus={(id) => setSelectedIds([id])}
-            onRunNeighborsForFocused={runNeighborsForSelected}
-          />
+          isIndexPanelOpen && source.kind === 'search-index' ? (
+            <IndexInfoSidePanel
+              indexName={source.index}
+              onClose={() => setIsIndexPanelOpen(false)}
+            />
+          ) : (
+            <VectorVisualizerResults
+              context={inspectorContext}
+              exactness={
+                workspaceMode === 'neighbors' ? query.exactness : 'sample-exact'
+              }
+              focusedId={selectedIds[0]}
+              provenance={inspectorProvenance}
+              rows={resultRows}
+              sourceKind={sourceKind}
+              status={resultStatus}
+              onCopyVisibleIds={copyIds}
+              onCopyFocusedId={(id) => copyIds([id])}
+              onExportFocusedResult={(row) => void exportDocuments([row])}
+              onExportVisibleResults={(rows) => void exportDocuments(rows)}
+              onResultFocus={(id) => setSelectedIds([id])}
+              onRunNeighborsForFocused={runNeighborsForSelected}
+            />
+          )
         }
       />
     </NativeHost>
