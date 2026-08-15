@@ -75,6 +75,7 @@ import type { SensitivityResult } from 'uiSrc/packages/vector-visualizer/src/tun
 import {
   recommendSearchIndexTuning,
   recommendVectorSetTuning,
+  resolveSearchIndexTuningProfile,
   type TuneRecommendation,
 } from 'uiSrc/packages/vector-visualizer/src/tune/recommendations'
 import { planSensitivityRuns } from 'uiSrc/packages/vector-visualizer/src/tune/sensitivity'
@@ -1403,17 +1404,36 @@ export const VectorVisualizerPage = () => {
 
   const sourceKind = source.kind
   const tuneConfig = sample
-    ? {
-        count: sample.result.sourceCount,
-        dimensions: sample.result.dimensions,
-        ...(sample.result.metric === 'unknown'
-          ? {}
-          : { metric: sample.result.metric as VectorMetric }),
-        algorithm: sample.result.algorithm,
-        m: sample.result.m,
-        efConstruction: sample.result.efConstruction,
-        efRuntime: sample.result.efRuntime,
-      }
+    ? source.kind === 'search-index'
+      ? resolveSearchIndexTuningProfile({
+          count: sample.result.sourceCount,
+          dimensions: sample.result.dimensions,
+          ...(sample.result.metric === 'unknown'
+            ? {}
+            : { metric: sample.result.metric as VectorMetric }),
+          algorithm: sample.result.algorithm,
+          m: sample.result.m,
+          efConstruction: sample.result.efConstruction,
+          efRuntime: efRuntime ?? sample.result.efRuntime,
+          epsilon: queryEpsilon,
+          compression: sample.result.compression,
+          graphMaxDegree: sample.result.graphMaxDegree,
+          constructionWindowSize: sample.result.constructionWindowSize,
+          searchWindowSize: searchWindowSize ?? sample.result.searchWindowSize,
+          useSearchHistory,
+          searchBufferCapacity,
+        })
+      : {
+          count: sample.result.sourceCount,
+          dimensions: sample.result.dimensions,
+          ...(sample.result.metric === 'unknown'
+            ? {}
+            : { metric: sample.result.metric as VectorMetric }),
+          algorithm: sample.result.algorithm,
+          m: sample.result.m,
+          efConstruction: sample.result.efConstruction,
+          efRuntime: efRuntime ?? sample.result.efRuntime,
+        }
     : undefined
   const tuneRecommendations: TuneRecommendation[] =
     sample && tuneConfig

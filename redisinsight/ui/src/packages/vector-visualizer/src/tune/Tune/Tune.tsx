@@ -25,6 +25,22 @@ const configLabelForSourceKind = (
     ? 'VSIM-relevant parameters observed for this Vector Set.'
     : 'FT.INFO-relevant parameters observed for this Search index.'
 
+const parameterLabel = (key: string): string => {
+  const labels: Record<string, string> = {
+    m: 'M',
+    efConstruction: 'EF_CONSTRUCTION',
+    efRuntime: 'EF_RUNTIME',
+    epsilon: 'EPSILON',
+    graphMaxDegree: 'GRAPH_MAX_DEGREE',
+    constructionWindowSize: 'CONSTRUCTION_WINDOW_SIZE',
+    searchWindowSize: 'SEARCH_WINDOW_SIZE',
+    useSearchHistory: 'USE_SEARCH_HISTORY',
+    searchBufferCapacity: 'SEARCH_BUFFER_CAPACITY',
+  }
+
+  return labels[key] ?? key
+}
+
 export const Tune = ({
   sensitivityRuns,
   selectedK,
@@ -33,7 +49,9 @@ export const Tune = ({
   currentConfig,
   sourceKind,
 }: TuneProps) => {
-  const configEntries = Object.entries(currentConfig ?? {})
+  const configEntries = Object.entries(currentConfig ?? {}).filter(
+    ([, value]) => value !== undefined,
+  )
 
   return (
     <Col aria-label="Tune" gap="m">
@@ -80,7 +98,7 @@ export const Tune = ({
             {configEntries.map(([key, value]) => (
               <S.ConfigChip key={key}>
                 <Text color="subdued" component="span" size="XS">
-                  {key}
+                  {parameterLabel(key)}
                 </Text>
                 <S.Code>{String(value)}</S.Code>
               </S.ConfigChip>

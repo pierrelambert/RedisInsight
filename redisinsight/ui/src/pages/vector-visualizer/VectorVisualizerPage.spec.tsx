@@ -339,6 +339,8 @@ describe('VectorVisualizerPage', () => {
                     2,
                     'distance_metric',
                     'COSINE',
+                    'algorithm',
+                    'HNSW',
                   ],
                 ],
               ],
@@ -515,6 +517,12 @@ describe('VectorVisualizerPage', () => {
     expect(screen.getByText(/^source configuration:/)).toHaveTextContent(
       '(measured)',
     )
+    const tunePanel = screen.getByLabelText('Tune')
+    expect(tunePanel).toHaveTextContent('M16')
+    expect(tunePanel).toHaveTextContent('EF_CONSTRUCTION200')
+    expect(tunePanel).toHaveTextContent('EF_RUNTIME10')
+    expect(tunePanel).toHaveTextContent('EPSILON0.01')
+    expect(within(tunePanel).queryByText('undefined')).not.toBeInTheDocument()
 
     openAdditionalWorkflow('Advanced')
     expect(screen.getByText('Measured Search execution evidence')).toBeVisible()

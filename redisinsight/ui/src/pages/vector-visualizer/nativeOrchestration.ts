@@ -76,6 +76,7 @@ export interface NativeSampleResult {
   efRuntime?: number
   compression?: string
   graphMaxDegree?: number
+  constructionWindowSize?: number
   searchWindowSize?: number
   quantization?: string
   graphFacts?: VectorSetGraphFacts
@@ -320,6 +321,7 @@ const sampleSearch = async (input: SearchSamplingInput) => {
     storage: discovery.storage === 'json' ? 'json' : 'hash',
     compression: field.compression,
     graphMaxDegree: field.graphMaxDegree,
+    constructionWindowSize: field.constructionWindowSize,
     searchWindowSize: field.searchWindowSize,
     sourceCount: discovery.indexedCount,
     sampleCount: sample.length,

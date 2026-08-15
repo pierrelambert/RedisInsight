@@ -114,7 +114,7 @@ describe('Tune', () => {
   it('renders the current config section', () => {
     renderComponent({
       recommendations: [],
-      currentConfig: { EF_RUNTIME: 100, M: 16 },
+      currentConfig: { EF_RUNTIME: 100, M: 16, unsetValue: undefined },
       sourceKind: 'search-index',
     })
 
@@ -122,6 +122,8 @@ describe('Tune', () => {
     expect(screen.getByText('100')).toBeInTheDocument()
     expect(screen.getByText('M')).toBeInTheDocument()
     expect(screen.getByText('16')).toBeInTheDocument()
+    expect(screen.queryByText('unsetValue')).not.toBeInTheDocument()
+    expect(screen.queryByText('undefined')).not.toBeInTheDocument()
     expect(
       screen.getByText(
         'FT.INFO-relevant parameters observed for this Search index.',

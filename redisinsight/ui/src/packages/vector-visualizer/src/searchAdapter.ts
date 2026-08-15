@@ -342,6 +342,8 @@ export interface SearchVectorField {
   compression?: string
   /** SVS-VAMANA GRAPH_MAX_DEGREE. */
   graphMaxDegree?: number
+  /** SVS-VAMANA CONSTRUCTION_WINDOW_SIZE. */
+  constructionWindowSize?: number
   /** SVS-VAMANA SEARCH_WINDOW_SIZE (query-time default). */
   searchWindowSize?: number
   /** SVS-VAMANA TRAINING_THRESHOLD. */
@@ -581,6 +583,9 @@ export const parseSearchInfo = (reply: unknown) => {
             asText(recordValue(data, 'compression'))?.toUpperCase() ??
             undefined,
           graphMaxDegree: asNumber(recordValue(data, 'graph_max_degree')),
+          constructionWindowSize: asNumber(
+            recordValue(data, 'construction_window_size'),
+          ),
           searchWindowSize: asNumber(recordValue(data, 'search_window_size')),
           trainingThreshold: asNumber(recordValue(data, 'training_threshold')),
         } satisfies SearchVectorField,

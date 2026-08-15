@@ -28,6 +28,13 @@ export interface SearchIndexProfile {
   m?: number
   efConstruction?: number
   efRuntime?: number
+  epsilon?: number
+  compression?: string
+  graphMaxDegree?: number
+  constructionWindowSize?: number
+  searchWindowSize?: number
+  useSearchHistory?: 'OFF' | 'ON' | 'AUTO'
+  searchBufferCapacity?: number | 'SEARCH_WINDOW_SIZE'
 }
 
 const SMALL_INDEX_LIMIT = 10_000
@@ -37,6 +44,14 @@ const VERY_HIGH_DIMENSION_THRESHOLD = 512
 const DEFAULT_M = 16
 const MAX_JUSTIFIED_M = 64
 const DEFAULT_EF_CONSTRUCTION = 200
+const DEFAULT_EF_RUNTIME = 10
+const DEFAULT_EPSILON = 0.01
+const DEFAULT_SVS_COMPRESSION = 'none'
+const DEFAULT_SVS_GRAPH_MAX_DEGREE = 32
+const DEFAULT_SVS_CONSTRUCTION_WINDOW_SIZE = 200
+const DEFAULT_SVS_SEARCH_WINDOW_SIZE = 10
+const DEFAULT_SVS_USE_SEARCH_HISTORY = 'AUTO'
+const DEFAULT_SVS_SEARCH_BUFFER_CAPACITY = 'SEARCH_WINDOW_SIZE'
 const LOW_RECALL_THRESHOLD = 0.9
 
 const CONFIDENCE_WEIGHT: Record<TuneConfidence, number> = {
@@ -111,6 +126,48 @@ const mGuidanceForDimensions = (dimensions?: number): SizeGuidance => {
   }
 }
 
+const isHnswAlgorithm = (algorithm?: string) =>
+  algorithm?.toLowerCase() === 'hnsw'
+
+const isSvsVamanaAlgorithm = (algorithm?: string) => {
+  const normalized = algorithm?.toLowerCase()
+  return normalized === 'svs-vamana' || normalized === 'svs_vamana'
+}
+
+export const resolveSearchIndexTuningProfile = (
+  profile: SearchIndexProfile,
+): SearchIndexProfile => {
+  if (isHnswAlgorithm(profile.algorithm)) {
+    return {
+      ...profile,
+      m: profile.m ?? DEFAULT_M,
+      efConstruction: profile.efConstruction ?? DEFAULT_EF_CONSTRUCTION,
+      efRuntime: profile.efRuntime ?? DEFAULT_EF_RUNTIME,
+      epsilon: profile.epsilon ?? DEFAULT_EPSILON,
+    }
+  }
+
+  if (isSvsVamanaAlgorithm(profile.algorithm)) {
+    const searchWindowSize =
+      profile.searchWindowSize ?? DEFAULT_SVS_SEARCH_WINDOW_SIZE
+    return {
+      ...profile,
+      compression: profile.compression ?? DEFAULT_SVS_COMPRESSION,
+      graphMaxDegree: profile.graphMaxDegree ?? DEFAULT_SVS_GRAPH_MAX_DEGREE,
+      constructionWindowSize:
+        profile.constructionWindowSize ?? DEFAULT_SVS_CONSTRUCTION_WINDOW_SIZE,
+      searchWindowSize,
+      epsilon: profile.epsilon ?? DEFAULT_EPSILON,
+      useSearchHistory:
+        profile.useSearchHistory ?? DEFAULT_SVS_USE_SEARCH_HISTORY,
+      searchBufferCapacity:
+        profile.searchBufferCapacity ?? DEFAULT_SVS_SEARCH_BUFFER_CAPACITY,
+    }
+  }
+
+  return profile
+}
+
 const lowRecallRecommendation = (
   benchmarkRecall: number,
   efRuntime?: number,
@@ -175,15 +232,62 @@ export const recommendVectorSetTuning = (
 export const recommendSearchIndexTuning = (
   profile: SearchIndexProfile,
 ): TuneRecommendation[] => {
-  if (profile.algorithm?.toLowerCase() !== 'hnsw') return []
+  const effectiveProfile = resolveSearchIndexTuningProfile(profile)
+
+  if (isSvsVamanaAlgorithm(effectiveProfile.algorithm)) {
+    return sortByConfidenceDesc([
+      {
+        parameter: 'SEARCH_WINDOW_SIZE',
+        currentValue: effectiveProfile.searchWindowSize,
+        suggestedRange: '20-100',
+        guidance:
+          'SEARCH_WINDOW_SIZE is the SVS-VAMANA query-time recall lever; increase it for higher recall when latency budget allows.',
+        impact:
+          'Higher SEARCH_WINDOW_SIZE improves recall but increases query latency.',
+        confidence: 'medium',
+      },
+      {
+        parameter: 'EPSILON',
+        currentValue: effectiveProfile.epsilon,
+        suggestedRange: '0.01-0.05',
+        guidance:
+          'EPSILON controls approximate range-query expansion for SVS-VAMANA.',
+        impact:
+          'Higher EPSILON can scan a wider candidate boundary and increase runtime.',
+        confidence: 'medium',
+      },
+      {
+        parameter: 'GRAPH_MAX_DEGREE',
+        currentValue: effectiveProfile.graphMaxDegree,
+        suggestedRange: '32-64',
+        guidance:
+          'GRAPH_MAX_DEGREE is the SVS-VAMANA graph connectivity setting, equivalent to HNSW M*2.',
+        impact:
+          'Higher GRAPH_MAX_DEGREE improves recall but increases memory usage.',
+        confidence: 'medium',
+      },
+      {
+        parameter: 'CONSTRUCTION_WINDOW_SIZE',
+        currentValue: effectiveProfile.constructionWindowSize,
+        suggestedRange: '200+',
+        guidance:
+          'CONSTRUCTION_WINDOW_SIZE controls graph quality during index build.',
+        impact:
+          'Higher CONSTRUCTION_WINDOW_SIZE improves graph quality but slows index creation.',
+        confidence: 'medium',
+      },
+    ])
+  }
+
+  if (!isHnswAlgorithm(effectiveProfile.algorithm)) return []
 
   const recommendations: TuneRecommendation[] = []
-  const count = profile.count ?? 0
+  const count = effectiveProfile.count ?? 0
 
   const efRuntime = efRuntimeGuidanceForSize(count)
   recommendations.push({
     parameter: 'EF_RUNTIME',
-    currentValue: profile.efRuntime,
+    currentValue: effectiveProfile.efRuntime,
     suggestedRange: efRuntime.suggestedRange,
     guidance: efRuntime.guidance,
     impact:
@@ -193,7 +297,7 @@ export const recommendSearchIndexTuning = (
 
   recommendations.push({
     parameter: 'EF_CONSTRUCTION',
-    currentValue: profile.efConstruction,
+    currentValue: effectiveProfile.efConstruction,
     suggestedRange: `${DEFAULT_EF_CONSTRUCTION}+`,
     guidance:
       'EF_CONSTRUCTION controls build-time graph quality; 200 is a reasonable starting point for most workloads.',
@@ -201,10 +305,10 @@ export const recommendSearchIndexTuning = (
     confidence: 'medium',
   })
 
-  const mGuidance = mGuidanceForDimensions(profile.dimensions)
+  const mGuidance = mGuidanceForDimensions(effectiveProfile.dimensions)
   recommendations.push({
     parameter: 'M',
-    currentValue: profile.m,
+    currentValue: effectiveProfile.m,
     suggestedRange: mGuidance.suggestedRange,
     guidance: mGuidance.guidance,
     impact:
@@ -212,8 +316,19 @@ export const recommendSearchIndexTuning = (
     confidence: mGuidance.confidence,
   })
 
-  if (profile.m !== undefined && profile.m > MAX_JUSTIFIED_M)
-    recommendations.push(excessiveMRecommendation(profile.m))
+  recommendations.push({
+    parameter: 'EPSILON',
+    currentValue: effectiveProfile.epsilon,
+    suggestedRange: '0.01-0.05',
+    guidance:
+      'EPSILON is the HNSW range-query expansion factor and is tunable at query time.',
+    impact:
+      'Higher EPSILON can improve range-query recall but increases query runtime.',
+    confidence: 'medium',
+  })
+
+  if (effectiveProfile.m !== undefined && effectiveProfile.m > MAX_JUSTIFIED_M)
+    recommendations.push(excessiveMRecommendation(effectiveProfile.m))
 
   return sortByConfidenceDesc(recommendations)
 }

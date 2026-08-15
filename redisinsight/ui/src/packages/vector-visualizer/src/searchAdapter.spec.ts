@@ -213,6 +213,8 @@ describe('parseSearchInfo', () => {
       'LVQ8',
       'graph_max_degree',
       '40',
+      'construction_window_size',
+      '250',
       'search_window_size',
       '20',
       'training_threshold',
@@ -226,6 +228,7 @@ describe('parseSearchInfo', () => {
     expect(field.algorithm).toBe('svs-vamana')
     expect(field.compression).toBe('LVQ8')
     expect(field.graphMaxDegree).toBe(40)
+    expect(field.constructionWindowSize).toBe(250)
     expect(field.searchWindowSize).toBe(20)
     expect(field.trainingThreshold).toBe(100)
   })
@@ -265,6 +268,7 @@ describe('parseSearchInfo', () => {
     expect(field.efRuntime).toBe(150)
     expect(field.compression).toBeUndefined()
     expect(field.graphMaxDegree).toBeUndefined()
+    expect(field.constructionWindowSize).toBeUndefined()
     expect(field.searchWindowSize).toBeUndefined()
     expect(field.trainingThreshold).toBeUndefined()
   })
@@ -275,6 +279,8 @@ describe('parseSearchInfo', () => {
       'SVS-VAMANA',
       'graph_max_degree',
       '40',
+      'construction_window_size',
+      '250',
       'search_window_size',
       '20',
       'training_threshold',
@@ -287,6 +293,7 @@ describe('parseSearchInfo', () => {
     expect(field.algorithm).toBe('svs-vamana')
     expect(field.compression).toBeUndefined()
     expect(field.graphMaxDegree).toBe(40)
+    expect(field.constructionWindowSize).toBe(250)
     expect(field.searchWindowSize).toBe(20)
     expect(field.trainingThreshold).toBe(100)
   })

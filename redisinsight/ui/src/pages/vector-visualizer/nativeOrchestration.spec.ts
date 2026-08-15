@@ -135,6 +135,46 @@ describe('native vector sampling orchestration', () => {
     })
   })
 
+  it('preserves SVS-VAMANA tuning values discovered from FT.INFO', async () => {
+    const svsInfo = searchInfo().map((value) => value)
+    const attributesIndex = svsInfo.indexOf('attributes')
+    const attributes = svsInfo[attributesIndex + 1] as unknown[][]
+    const algorithmIndex = attributes[0].indexOf('algorithm')
+    attributes[0][algorithmIndex + 1] = 'SVS-VAMANA'
+    attributes[0] = [
+      ...attributes[0],
+      'compression',
+      'LVQ8',
+      'graph_max_degree',
+      '40',
+      'construction_window_size',
+      '250',
+      'search_window_size',
+      '20',
+    ]
+    const execute = replyByCommand({
+      'FT.INFO': svsInfo,
+      'FT.SEARCH': searchRows(
+        ['doc:1', float32(1, 2)],
+        ['doc:2', float32(3, 4)],
+      ),
+    })
+
+    const result = await orchestrateNativeSample({
+      source: { kind: 'search-index', index: 'idx', vectorField: 'embedding' },
+      limit: 500,
+      execute,
+    })
+
+    expect(result).toMatchObject({
+      algorithm: 'svs-vamana',
+      compression: 'LVQ8',
+      graphMaxDegree: 40,
+      constructionWindowSize: 250,
+      searchWindowSize: 20,
+    })
+  })
+
   it('keeps only explicitly allow-listed response metadata for the matrix seam', async () => {
     const execute = replyByCommand({
       'FT.INFO': searchInfo(1),

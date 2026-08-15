@@ -1,6 +1,7 @@
 import {
   recommendSearchIndexTuning,
   recommendVectorSetTuning,
+  resolveSearchIndexTuningProfile,
   TuneRecommendation,
 } from './recommendations'
 
@@ -204,6 +205,78 @@ describe('recommendSearchIndexTuning', () => {
       recommendations.find((recommendation) => recommendation.parameter === 'M')
         ?.currentValue,
     ).toBe(32)
+  })
+
+  it('uses Redis HNSW defaults when FT.INFO omits optional attributes', () => {
+    const profile = resolveSearchIndexTuningProfile({
+      algorithm: 'hnsw',
+      count: 5_000,
+      dimensions: 768,
+    })
+
+    expect(profile).toMatchObject({
+      m: 16,
+      efConstruction: 200,
+      efRuntime: 10,
+      epsilon: 0.01,
+    })
+
+    const recommendations = recommendSearchIndexTuning(profile)
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'EF_RUNTIME',
+      )?.currentValue,
+    ).toBe(10)
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'EF_CONSTRUCTION',
+      )?.currentValue,
+    ).toBe(200)
+    expect(
+      recommendations.find((recommendation) => recommendation.parameter === 'M')
+        ?.currentValue,
+    ).toBe(16)
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'EPSILON',
+      )?.currentValue,
+    ).toBe(0.01)
+  })
+
+  it('uses Redis SVS-VAMANA defaults when FT.INFO omits optional attributes', () => {
+    const profile = resolveSearchIndexTuningProfile({
+      algorithm: 'svs-vamana',
+      count: 5_000,
+      dimensions: 768,
+    })
+
+    expect(profile).toMatchObject({
+      compression: 'none',
+      graphMaxDegree: 32,
+      constructionWindowSize: 200,
+      searchWindowSize: 10,
+      epsilon: 0.01,
+      useSearchHistory: 'AUTO',
+      searchBufferCapacity: 'SEARCH_WINDOW_SIZE',
+    })
+
+    const recommendations = recommendSearchIndexTuning(profile)
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'SEARCH_WINDOW_SIZE',
+      )?.currentValue,
+    ).toBe(10)
+    expect(
+      recommendations.find(
+        (recommendation) => recommendation.parameter === 'GRAPH_MAX_DEGREE',
+      )?.currentValue,
+    ).toBe(32)
+    expect(
+      recommendations.find(
+        (recommendation) =>
+          recommendation.parameter === 'CONSTRUCTION_WINDOW_SIZE',
+      )?.currentValue,
+    ).toBe(200)
   })
 
   it('sorts recommendations by confidence, highest first', () => {
