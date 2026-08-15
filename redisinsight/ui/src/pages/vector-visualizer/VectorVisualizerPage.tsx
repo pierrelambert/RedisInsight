@@ -6,12 +6,16 @@ import React, {
   useRef,
   useState,
 } from 'react'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { Button } from 'uiSrc/components/base/forms/buttons'
+import { RiIcon } from 'uiSrc/components/base/icons'
 import { Col, Row } from 'uiSrc/components/base/layout/flex'
+import { Breadcrumbs } from 'uiSrc/components/base/navigation/breadcrumbs'
 import { Text, Title } from 'uiSrc/components/base/text'
 import { PluginsThemeContext } from 'uiSrc/components/base/utils/pluginsThemeContext'
+import { Pages } from 'uiSrc/constants'
 import { useTranslation } from 'uiSrc/i18n'
 import { IndexInfoSidePanel } from 'uiSrc/pages/vector-search/components/index-info-side-panel'
 import { ViewIndexButton } from 'uiSrc/pages/vector-search/pages/VectorSearchQueryPage/components/view-index-button'
@@ -91,10 +95,13 @@ import { normalizeCoordinates } from 'uiSrc/packages/vector-visualizer/src/rende
 import type { AtlasClusterLabel } from 'uiSrc/packages/vector-visualizer/src/atlas/Atlas/Atlas.types'
 
 import {
+  buildVectorVisualizerSourceSearch,
   consumeVectorVisualizerSource,
   createNativeVisualizerSession,
+  parseVectorVisualizerSourceSearch,
   type NativeVisualizerWorkflow,
   type VectorDataSourceRef,
+  vectorVisualizerSourceKey,
 } from './nativeHandoff'
 import {
   createNativeReadOnlyExecutor,
@@ -316,6 +323,25 @@ const NativeHost = styled.main`
 const NativeHeader = styled(Row)`
   flex: 0 0 auto;
   min-inline-size: 0;
+`
+
+const BreadcrumbLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.core.space.space050};
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: ${({ theme }) => theme.semantic.color.text.primary500};
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const SlashSeparator = styled.span`
+  color: ${({ theme }) => theme.semantic.color.text.neutral500};
 `
 
 const ModeHeader = styled(Row)`
@@ -1039,13 +1065,25 @@ const Health = ({
 
 export const VectorVisualizerPage = () => {
   const { t } = useTranslation()
-  const [source, setSource] = useState<VectorDataSourceRef>()
+  const history = useHistory()
+  const location = useLocation()
+  const { instanceId } = useParams<{ instanceId: string }>()
+  const routeSearch = location.search || history.location?.search || ''
+  const routeSource = useMemo(
+    () => parseVectorVisualizerSourceSearch(routeSearch),
+    [routeSearch],
+  )
+  const [source, setSource] = useState<VectorDataSourceRef | undefined>(
+    routeSource,
+  )
   const dispatch = useAppDispatch()
   const connectedInstance = useAppSelector(connectedInstanceSelector)
   const cliSettings = useAppSelector(cliSettingsSelector)
-  const [session] = useState(() =>
-    createNativeVisualizerSession({ workflow: 'explore' }),
-  )
+  const [session] = useState(() => {
+    const nextSession = createNativeVisualizerSession({ workflow: 'explore' })
+    if (routeSource) nextSession.setSource(routeSource)
+    return nextSession
+  })
   const layoutWorker = useRef<LayoutWorkerClient>()
   const layoutWorkerPromise = useRef<Promise<LayoutWorkerClient>>()
   const disposed = useRef(false)
@@ -1054,6 +1092,7 @@ export const VectorVisualizerPage = () => {
   const projectionAlgorithmRef = useRef<'umap' | 'pca'>('umap')
   const queryAnchorIdRef = useRef<string>()
   const runQueryRef = useRef<(anchorId?: string) => Promise<void>>()
+  const hydratedSourceKeyRef = useRef<string>()
   const [workflow, setWorkflow] = useState(
     () => session.getPreferences().workflow,
   )
@@ -1238,11 +1277,28 @@ export const VectorVisualizerPage = () => {
   }, [sample])
 
   useEffect(() => {
-    const nextSource = consumeVectorVisualizerSource()
+    const handoffSource = consumeVectorVisualizerSource()
+    const nextSource = handoffSource ?? routeSource
     if (!nextSource) return
+    const nextSourceKey = vectorVisualizerSourceKey(nextSource)
+    if (hydratedSourceKeyRef.current === nextSourceKey) return
+
+    hydratedSourceKeyRef.current = nextSourceKey
     session.setSource(nextSource)
     setSource(nextSource)
-  }, [session])
+
+    if (handoffSource?.kind === 'search-index' && !routeSource) {
+      const restorableLocation = {
+        pathname: location.pathname,
+        search: buildVectorVisualizerSourceSearch(handoffSource),
+      }
+      if (typeof history.replace === 'function') {
+        history.replace(restorableLocation)
+      } else {
+        history.push(restorableLocation)
+      }
+    }
+  }, [history, location.pathname, routeSource, session])
 
   useEffect(() => {
     if (
@@ -1413,6 +1469,10 @@ export const VectorVisualizerPage = () => {
         <Text>{t('vectorVisualizer.page.sourceMissing')}</Text>
       </Col>
     )
+  }
+
+  const navigateToIndexes = () => {
+    history.push(Pages.vectorSearch(instanceId ?? connectedInstance.id))
   }
 
   const sourceKind = source.kind
@@ -3039,6 +3099,37 @@ export const VectorVisualizerPage = () => {
 
   return (
     <NativeHost data-testid="vector-visualizer-native-host">
+      {source.kind === 'search-index' && (
+        <Breadcrumbs.Compose
+          aria-label={t('vectorSearch.query.breadcrumb.ariaLabel')}
+          data-testid="vector-visualizer-breadcrumb-search-indexes"
+        >
+          <Breadcrumbs.List>
+            <Breadcrumbs.Item>
+              <BreadcrumbLink
+                type="button"
+                onClick={navigateToIndexes}
+                data-testid="vector-visualizer-breadcrumb-search-indexes-link"
+              >
+                <RiIcon type="ChevronLeftIcon" size="S" />
+                <Title size="M" color="primary">
+                  {t('vectorSearch.query.breadcrumb.indexes')}
+                </Title>
+              </BreadcrumbLink>
+            </Breadcrumbs.Item>
+            <Breadcrumbs.Item>
+              <Breadcrumbs.Separator>
+                <SlashSeparator>/</SlashSeparator>
+              </Breadcrumbs.Separator>
+            </Breadcrumbs.Item>
+            <Breadcrumbs.Item>
+              <Title size="M" color="primary">
+                {source.index}
+              </Title>
+            </Breadcrumbs.Item>
+          </Breadcrumbs.List>
+        </Breadcrumbs.Compose>
+      )}
       <NativeHeader align="center" gap="m" justify="between" wrap>
         <Col gap="xs">
           <Title component="h1" size="M">

@@ -220,9 +220,10 @@ describe('useListContent', () => {
       index,
       vectorField: 'embedding',
     })
-    expect(mockPush).toHaveBeenCalledWith(
-      Pages.vectorVisualizer(mockInstanceId),
-    )
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: Pages.vectorVisualizer(mockInstanceId),
+      search: 'index=idx-products&vectorField=embedding',
+    })
     expect(result.current.visualizingIndexName).toBeNull()
   })
 

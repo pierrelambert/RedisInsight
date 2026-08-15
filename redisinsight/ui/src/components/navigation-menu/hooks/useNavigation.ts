@@ -37,6 +37,7 @@ export function useNavigation() {
   const dispatch = useAppDispatch()
 
   const [activePage, setActivePage] = useState(Pages.home)
+  const [lastSearchPath, setLastSearchPath] = useState<string>()
 
   const { workspace } = useAppSelector(appContextSelector)
 
@@ -54,6 +55,16 @@ export function useNavigation() {
     setActivePage(`/${last(location.pathname.split('/'))}`)
   }, [location])
 
+  useEffect(() => {
+    const page = location.pathname.split('/')[2]
+    if (
+      page === PageNames.vectorSearch ||
+      page === PageNames.vectorVisualizer
+    ) {
+      setLastSearchPath(`${location.pathname}${location.search}`)
+    }
+  }, [location.pathname, location.search])
+
   const handleGoPage = (page: string) => history.push(page)
 
   const isAnalyticsPath = (activePage: string) =>
@@ -67,7 +78,14 @@ export function useNavigation() {
     )
 
   const isVectorSearchPath = () =>
-    location.pathname.split('/')[2] === PageNames.vectorSearch
+    [PageNames.vectorSearch, PageNames.vectorVisualizer].includes(
+      location.pathname.split('/')[2] as PageNames,
+    )
+
+  const vectorSearchTarget =
+    lastSearchPath?.startsWith(`/${connectedInstanceId}/`) === true
+      ? lastSearchPath
+      : Pages.vectorSearch(connectedInstanceId)
 
   const getAdditionPropsForHighlighting = (
     pageName: string,
@@ -99,7 +117,7 @@ export function useNavigation() {
       tooltipText: 'Search',
       pageName: PageNames.vectorSearch,
       ariaLabel: 'Search',
-      onClick: () => handleGoPage(Pages.vectorSearch(connectedInstanceId)),
+      onClick: () => handleGoPage(vectorSearchTarget),
       dataTestId: 'vector-search-page-btn',
       connectedInstanceId,
       isActivePage: isVectorSearchPath(),

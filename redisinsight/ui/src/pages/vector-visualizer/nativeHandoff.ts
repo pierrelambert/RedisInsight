@@ -4,10 +4,14 @@ import {
 } from 'uiSrc/packages/vector-visualizer/src/contracts'
 
 /**
- * The native route deliberately carries no source data in its URL/history.
- * This module is process-local and consumes the reference exactly once.
+ * Binary Vector Set keys still use process-local handoff only. Search-index
+ * sources are also encoded in URL query params so the route can be restored
+ * after top-level navigation.
  */
 export type { VectorDataSourceRef }
+
+const SEARCH_INDEX_PARAM = 'index'
+const SEARCH_VECTOR_FIELD_PARAM = 'vectorField'
 
 let pendingSource: VectorDataSourceRef | undefined
 
@@ -20,6 +24,40 @@ export const consumeVectorVisualizerSource = () => {
   pendingSource = undefined
   return source
 }
+
+export const buildVectorVisualizerSourceSearch = (
+  source: VectorDataSourceRef,
+): string => {
+  if (source.kind !== 'search-index') return ''
+
+  const params = new URLSearchParams()
+  params.set(SEARCH_INDEX_PARAM, source.index)
+  params.set(SEARCH_VECTOR_FIELD_PARAM, source.vectorField)
+  return params.toString()
+}
+
+export const parseVectorVisualizerSourceSearch = (
+  search: string,
+): VectorDataSourceRef | undefined => {
+  const params = new URLSearchParams(search)
+  const index = params.get(SEARCH_INDEX_PARAM)
+  const vectorField = params.get(SEARCH_VECTOR_FIELD_PARAM)
+
+  if (index == null || !vectorField) return undefined
+
+  return {
+    kind: 'search-index',
+    index,
+    vectorField,
+  }
+}
+
+export const vectorVisualizerSourceKey = (
+  source: VectorDataSourceRef,
+): string =>
+  source.kind === 'search-index'
+    ? `search-index:${source.index}:${source.vectorField}`
+    : `vector-set:${Array.from(source.key).join(',')}`
 
 export type NativeVisualizerWorkflow =
   | 'explore'

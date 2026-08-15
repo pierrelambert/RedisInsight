@@ -1,4 +1,6 @@
 import React from 'react'
+import { createMemoryHistory } from 'history'
+import { Route, Router } from 'react-router-dom'
 import { apiService } from 'uiSrc/services'
 import {
   fireEvent,
@@ -208,6 +210,29 @@ const getVisibleText = (text: string) =>
     .getAllByText(text)
     .find((element) => !element.closest('[hidden], details:not([open])'))!
 
+type TestRoute =
+  | string
+  | {
+      pathname: string
+      search?: string
+    }
+
+const renderPage = (route: TestRoute = '/') => {
+  const history = createMemoryHistory({ initialEntries: [route] })
+  const result = render(
+    <Router history={history}>
+      <Route path="/:instanceId/vector-visualizer">
+        <VectorVisualizerPage />
+      </Route>
+      <Route exact path="/">
+        <VectorVisualizerPage />
+      </Route>
+    </Router>,
+    { withRouter: false },
+  )
+  return { ...result, history }
+}
+
 describe('VectorVisualizerPage', () => {
   beforeEach(() => {
     ;(useAppSelector as jest.Mock).mockReturnValue({
@@ -220,12 +245,12 @@ describe('VectorVisualizerPage', () => {
 
   afterEach(() => {
     // Consume any handoff that a test did not mount with.
-    render(<VectorVisualizerPage />).unmount()
+    renderPage().unmount()
     jest.restoreAllMocks()
   })
 
   it('shows an explicit recovery state when the one-shot source has expired', () => {
-    render(<VectorVisualizerPage />)
+    renderPage()
 
     expect(
       screen.getByTestId('vector-visualizer-source-missing'),
@@ -233,6 +258,27 @@ describe('VectorVisualizerPage', () => {
     expect(
       screen.getAllByRole('heading', { name: 'Vector Visualizer' }),
     ).toHaveLength(1)
+  })
+
+  it('stores a Search index source in the URL and links back to Indexes', async () => {
+    setVectorVisualizerSource({
+      kind: 'search-index',
+      index: 'idx:bikes_vss',
+      vectorField: 'description_embeddings',
+    })
+    renderPage('/instance-1/vector-visualizer')
+
+    expect(
+      await screen.findByTestId('vector-visualizer-native-host'),
+    ).toHaveTextContent(
+      'Source ready: Search index idx:bikes_vss, vector field description_embeddings.',
+    )
+    expect(
+      screen.getByTestId('vector-visualizer-breadcrumb-search-indexes'),
+    ).toHaveTextContent('Indexes/idx:bikes_vss')
+    expect(
+      screen.getByTestId('vector-visualizer-breadcrumb-search-indexes-link'),
+    ).toHaveTextContent('Indexes')
   })
 
   it('preserves the one-shot source when the page is mounted through a lazy route', async () => {
@@ -245,12 +291,16 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
+    const history = createMemoryHistory({ initialEntries: ['/'] })
+
     render(
-      <React.StrictMode>
-        <React.Suspense fallback={<div>Loading route</div>}>
-          <LazyVectorVisualizerPage />
-        </React.Suspense>
-      </React.StrictMode>,
+      <Router history={history}>
+        <React.StrictMode>
+          <React.Suspense fallback={<div>Loading route</div>}>
+            <LazyVectorVisualizerPage />
+          </React.Suspense>
+        </React.StrictMode>
+      </Router>,
     )
 
     expect(
@@ -272,7 +322,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
 
     await waitFor(() => expect(mockDispatch).toHaveBeenCalledTimes(1))
     expect(
@@ -287,7 +337,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
 
     expect(
       screen.getByTestId('vector-visualizer-native-host'),
@@ -331,7 +381,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
 
     fireEvent.click(screen.getByTestId('view-index-btn'))
 
@@ -404,7 +454,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     expect(post).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
@@ -636,7 +686,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
     await waitFor(() =>
       expect(
@@ -706,7 +756,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
     await waitFor(() =>
       expect(
@@ -765,7 +815,7 @@ describe('VectorVisualizerPage', () => {
       key: new Uint8Array([0, 255]),
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
     await waitFor(() =>
       expect(
@@ -873,7 +923,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.change(screen.getByLabelText('Filter sampled documents'), {
       target: { value: '@brand:brand-1' },
     })
@@ -948,7 +998,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
     await waitFor(() =>
       expect(
@@ -1063,7 +1113,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
     await waitFor(() =>
       expect(
@@ -1173,7 +1223,7 @@ describe('VectorVisualizerPage', () => {
       vectorField: 'embedding',
     })
 
-    render(<VectorVisualizerPage />)
+    renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
     await waitFor(() =>
       expect(
@@ -1266,7 +1316,7 @@ describe('VectorVisualizerPage', () => {
         vectorField: 'embedding',
       })
 
-      render(<VectorVisualizerPage />)
+      renderPage()
       fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
       await waitFor(() =>
         expect(

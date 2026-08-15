@@ -27,7 +27,10 @@ import { queryLibraryNotifications } from 'uiSrc/pages/vector-search/constants'
 import { SearchIndexDetailsSource } from 'uiSrc/pages/vector-search/telemetry.constants'
 import { localStorageService } from 'uiSrc/services'
 import { appFeatureFlagsFeaturesSelector } from 'uiSrc/slices/app/features'
-import { setVectorVisualizerSource } from 'uiSrc/pages/vector-visualizer'
+import {
+  buildVectorVisualizerSourceSearch,
+  setVectorVisualizerSource,
+} from 'uiSrc/pages/vector-visualizer'
 
 import { IndexListAction } from '../../components/index-list/IndexList.types'
 import { useIndexListData } from '../useIndexListData'
@@ -106,13 +109,17 @@ export const useListContent = (search = '') => {
   const handleVectorFieldSelected = useCallback(
     (vectorField: string) => {
       if (!visualizingIndexName) return
-      setVectorVisualizerSource({
+      const source = {
         kind: 'search-index',
         index: visualizingIndexName,
         vectorField,
-      })
+      } as const
+      setVectorVisualizerSource(source)
       setVisualizingIndexName(null)
-      history.push(Pages.vectorVisualizer(instanceId))
+      history.push({
+        pathname: Pages.vectorVisualizer(instanceId),
+        search: buildVectorVisualizerSourceSearch(source),
+      })
     },
     [history, instanceId, visualizingIndexName],
   )

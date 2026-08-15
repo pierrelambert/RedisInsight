@@ -1,7 +1,10 @@
 import {
+  buildVectorVisualizerSourceSearch,
   createNativeVisualizerSession,
   consumeVectorVisualizerSource,
+  parseVectorVisualizerSourceSearch,
   setVectorVisualizerSource,
+  vectorVisualizerSourceKey,
 } from './nativeHandoff'
 
 describe('native Vector Visualizer handoff', () => {
@@ -33,6 +36,28 @@ describe('native Vector Visualizer handoff', () => {
       index: 'idx-products',
       vectorField: 'embedding',
     })
+  })
+
+  it('round-trips a Search index source through restorable URL search params', () => {
+    const source = {
+      kind: 'search-index' as const,
+      index: 'idx:bikes/vss',
+      vectorField: 'description_embeddings',
+    }
+
+    const search = buildVectorVisualizerSourceSearch(source)
+
+    expect(parseVectorVisualizerSourceSearch(`?${search}`)).toEqual(source)
+    expect(vectorVisualizerSourceKey(source)).toBe(
+      'search-index:idx:bikes/vss:description_embeddings',
+    )
+  })
+
+  it('does not serialize binary Vector Set sources into URL params', () => {
+    const source = { kind: 'vector-set' as const, key: new Uint8Array([1, 2]) }
+
+    expect(buildVectorVisualizerSourceSearch(source)).toBe('')
+    expect(parseVectorVisualizerSourceSearch('')).toBeUndefined()
   })
 
   it('cancels and stale-rejects prior source work, clears raw vectors, and keeps only workflow preference', () => {
