@@ -43,6 +43,7 @@ const parameterLabel = (key: string): string => {
 
 export const Tune = ({
   sensitivityRuns,
+  sensitivityStatus = 'idle',
   selectedK,
   onSelectK,
   recommendations,
@@ -63,7 +64,21 @@ export const Tune = ({
           Compare the UMAP layout at a few nNeighbors values before committing
           to one for the main Atlas.
         </Text>
-        {sensitivityRuns.length === 0 ? (
+        {sensitivityStatus === 'running' ? (
+          <Text role="status" color="subdued">
+            Running k sensitivity maps…
+          </Text>
+        ) : sensitivityStatus === 'unavailable' ? (
+          <Text role="status" color="subdued">
+            Sensitivity maps need at least 4 retained sampled vectors. Resample
+            vectors and try again.
+          </Text>
+        ) : sensitivityStatus === 'error' ? (
+          <Text role="status" color="subdued">
+            Sensitivity maps could not be computed. Resample vectors and try
+            again.
+          </Text>
+        ) : sensitivityRuns.length === 0 ? (
           <Text role="status" color="subdued">
             No sensitivity runs are available.
           </Text>

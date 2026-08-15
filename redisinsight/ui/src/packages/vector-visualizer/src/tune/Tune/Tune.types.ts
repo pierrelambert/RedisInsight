@@ -9,6 +9,7 @@ export interface SensitivityResult {
 
 export interface TuneProps {
   sensitivityRuns: SensitivityResult[]
+  sensitivityStatus?: 'idle' | 'running' | 'unavailable' | 'error'
   selectedK?: number
   onSelectK?(k: number): void
   recommendations: TuneRecommendation[]

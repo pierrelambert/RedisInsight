@@ -103,6 +103,25 @@ describe('Tune', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the running sensitivity status before maps are available', () => {
+    renderComponent({ sensitivityRuns: [], sensitivityStatus: 'running' })
+
+    expect(screen.getByText('Running k sensitivity maps…')).toBeInTheDocument()
+    expect(
+      screen.queryByText('No sensitivity runs are available.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows why sensitivity maps are unavailable', () => {
+    renderComponent({ sensitivityRuns: [], sensitivityStatus: 'unavailable' })
+
+    expect(
+      screen.getByText(
+        'Sensitivity maps need at least 4 retained sampled vectors. Resample vectors and try again.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('shows the heuristic disclaimer', () => {
     renderComponent()
 

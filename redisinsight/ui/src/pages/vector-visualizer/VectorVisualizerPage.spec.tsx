@@ -646,6 +646,51 @@ describe('VectorVisualizerPage', () => {
     })
   })
 
+  it('renders k sensitivity maps from the retained sampled Search vectors', async () => {
+    const rows = Array.from({ length: 6 }, (_, index) => [
+      `doc:${index + 1}`,
+      float32(index + 1, index + 2),
+    ]) as Array<[string, string]>
+    jest.spyOn(apiService, 'post').mockImplementation((_, body) => {
+      const command = (body as { command: string }).command
+      const response = command.startsWith('FT.INFO')
+        ? searchInfo(rows.length)
+        : command.startsWith('FT.SEARCH')
+          ? searchRows(...rows)
+          : []
+      return Promise.resolve({
+        data: { status: 'success', response },
+      }) as never
+    })
+    setVectorVisualizerSource({
+      kind: 'search-index',
+      index: 'idx-products',
+      vectorField: 'embedding',
+    })
+
+    render(<VectorVisualizerPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sample vectors' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: /^(Index|Vector set) atlas$/ }),
+      ).toBeVisible(),
+    )
+
+    openAdditionalWorkflow('Compare & Tune')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Run k sensitivity maps' }),
+    )
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('MiniAtlas K=5')).toBeVisible(),
+    )
+    expect(
+      screen.queryByText('No sensitivity runs are available.'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByLabelText('MiniAtlas K=15')).toBeVisible()
+    expect(screen.getByLabelText('MiniAtlas K=30')).toBeVisible()
+  })
+
   it('preserves a binary Vector Set member through VEMB and documented VLINKS layers', async () => {
     const member = 'member\\x00\\xff'
     const target = 'target\\x00\\xfe'

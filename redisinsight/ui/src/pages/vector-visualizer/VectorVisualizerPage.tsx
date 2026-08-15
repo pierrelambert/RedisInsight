@@ -401,6 +401,8 @@ type NativePageStatus =
   | 'stale'
   | 'recoverable-error'
 
+type SensitivityStatus = 'idle' | 'running' | 'unavailable' | 'error'
+
 interface NativePageSample {
   result: Omit<NativeSampleResult, 'vectors'>
   coordinates: Float32Array
@@ -1131,6 +1133,8 @@ export const VectorVisualizerPage = () => {
   const [sensitivityRuns, setSensitivityRuns] = useState<SensitivityResult[]>(
     [],
   )
+  const [sensitivityStatus, setSensitivityStatus] =
+    useState<SensitivityStatus>('idle')
   const [selectedK, setSelectedK] = useState<number>()
   const sensitivityLayoutsRef = useRef(
     new Map<
@@ -1479,6 +1483,8 @@ export const VectorVisualizerPage = () => {
     setQueryAnchorId(undefined)
     setHybridResult(undefined)
     setAggregateResult(undefined)
+    setSensitivityRuns([])
+    setSensitivityStatus('idle')
     setStatus('fetching')
     try {
       const execute = createNativeReadOnlyExecutor({
@@ -1958,21 +1964,32 @@ export const VectorVisualizerPage = () => {
     const { dimensions } = sample.result
     if (count < 4 || !dimensions) {
       setSensitivityRuns([])
+      setSensitivityStatus('unavailable')
       return
     }
 
     const work = session.beginWork()
     setSensitivityRuns([])
+    setSensitivityStatus('running')
     setSelectedK(undefined)
     sensitivityLayoutsRef.current.clear()
 
     try {
       const vectors = new Float32Array(count * dimensions)
+      let hasMissingRawVector = false
       ids.forEach((id, index) => {
         const vector = session.getRawVector(id)
-        if (vector) vectors.set(vector, index * dimensions)
+        if (!vector) {
+          hasMissingRawVector = true
+          return
+        }
+
+        vectors.set(vector, index * dimensions)
       })
-      if (!ids.every((id) => session.getRawVector(id))) return
+      if (hasMissingRawVector) {
+        setSensitivityStatus('unavailable')
+        return
+      }
       const worker = await getLayoutWorker()
       if (!session.accept(work.generation, null).accepted) return
       const baseJob: LayoutJobV1 = {
@@ -2007,8 +2024,10 @@ export const VectorVisualizerPage = () => {
         })
       }
       setSensitivityRuns(results)
+      setSensitivityStatus(results.length > 0 ? 'idle' : 'unavailable')
     } catch {
       setSensitivityRuns([])
+      setSensitivityStatus('error')
     }
   }
 
@@ -2715,6 +2734,7 @@ export const VectorVisualizerPage = () => {
             recommendations={tuneRecommendations}
             selectedK={selectedK}
             sensitivityRuns={sensitivityRuns}
+            sensitivityStatus={sensitivityStatus}
             sourceKind={sourceKind}
             onSelectK={selectSensitivityK}
           />
