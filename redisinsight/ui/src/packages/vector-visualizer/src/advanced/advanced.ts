@@ -1,10 +1,4 @@
-import {
-  asNumber,
-  asText,
-  RedisArgument,
-  recordValue,
-  toRecord,
-} from '../contracts'
+import { asNumber, asText, RedisArgument } from '../contracts'
 import { parseSearchProfile } from '../searchAdapter'
 import { parseVectorSetMember } from '../vectorSetAdapter'
 import type { QueryLabProfile } from '../query-lab/QueryLab/QueryLab.types'
@@ -111,11 +105,9 @@ export const parseSearchExecutionEvidence = (
     }
   }
 
-  const profileValue =
-    recordValue(toRecord(reply), 'Profile') ??
-    (Array.isArray(reply) && reply.length === 2 ? reply[1] : undefined)
-  if (profileValue === undefined) return { kind: 'malformed' }
   const parsed = parseSearchProfile(reply)
+  if (!Object.keys(parsed.facts).length && !parsed.stages.length)
+    return { kind: 'malformed' }
   const facts = Object.fromEntries(
     Object.entries(parsed.facts).flatMap(([name, value]) => {
       const text = asText(value)

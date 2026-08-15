@@ -655,9 +655,9 @@ describe('planHybridQuery', () => {
         'KNN',
         'LOAD',
         '3',
-        'text_score',
-        'vector_score',
-        'hybrid_score',
+        '@text_score',
+        '@vector_score',
+        '@__combined_score',
         'PARAMS',
         '2',
         'vv_anchor',
@@ -666,16 +666,18 @@ describe('planHybridQuery', () => {
     )
   })
 
-  it('yields all 3 scores: text_score, vector_score, hybrid_score', () => {
+  it('yields text and vector scores and loads the Redis combined score', () => {
     const result = planHybridQuery(baseHybridInput)
 
     const yieldIndices = result.arguments.flatMap((value, index) =>
       value === 'YIELD_SCORE_AS' ? [index] : [],
     )
-    expect(yieldIndices).toHaveLength(3)
+    expect(yieldIndices).toHaveLength(2)
     expect(result.arguments[yieldIndices[0] + 1]).toBe('text_score')
     expect(result.arguments[yieldIndices[1] + 1]).toBe('vector_score')
-    expect(result.arguments[yieldIndices[2] + 1]).toBe('hybrid_score')
+    expect(result.arguments).toEqual(
+      expect.arrayContaining(['@__combined_score']),
+    )
   })
 
   it('preserves requested load fields after the required score aliases', () => {
@@ -688,10 +690,10 @@ describe('planHybridQuery', () => {
     expect(result.arguments.slice(loadIndex, loadIndex + 6)).toEqual([
       'LOAD',
       '4',
-      'text_score',
-      'vector_score',
-      'hybrid_score',
-      'brand',
+      '@text_score',
+      '@vector_score',
+      '@__combined_score',
+      '@brand',
     ])
   })
 
@@ -703,16 +705,32 @@ describe('planHybridQuery', () => {
     })
 
     const combineIndex = result.arguments.indexOf('COMBINE')
-    expect(result.arguments.slice(combineIndex, combineIndex + 8)).toEqual([
+    expect(result.arguments.slice(combineIndex, combineIndex + 7)).toEqual([
       'COMBINE',
       'RRF',
-      '6',
+      '4',
       'CONSTANT',
       '60',
       'WINDOW',
       '20',
-      'YIELD_SCORE_AS',
     ])
+    expect(result.arguments[combineIndex + 7]).not.toBe('YIELD_SCORE_AS')
+  })
+
+  it('sends Redis RRF defaults when no RRF overrides are provided', () => {
+    const result = planHybridQuery(baseHybridInput)
+
+    const combineIndex = result.arguments.indexOf('COMBINE')
+    expect(result.arguments.slice(combineIndex, combineIndex + 7)).toEqual([
+      'COMBINE',
+      'RRF',
+      '4',
+      'CONSTANT',
+      '60',
+      'WINDOW',
+      '20',
+    ])
+    expect(result.arguments[combineIndex + 7]).not.toBe('YIELD_SCORE_AS')
   })
 
   it('builds COMBINE LINEAR with ALPHA and BETA using the nargs convention', () => {
@@ -724,16 +742,35 @@ describe('planHybridQuery', () => {
     })
 
     const combineIndex = result.arguments.indexOf('COMBINE')
-    expect(result.arguments.slice(combineIndex, combineIndex + 8)).toEqual([
+    expect(result.arguments.slice(combineIndex, combineIndex + 7)).toEqual([
       'COMBINE',
       'LINEAR',
-      '6',
+      '4',
       'ALPHA',
       '0.7',
       'BETA',
       '0.3',
-      'YIELD_SCORE_AS',
     ])
+    expect(result.arguments[combineIndex + 7]).not.toBe('YIELD_SCORE_AS')
+  })
+
+  it('sends balanced LINEAR defaults when no LINEAR weights are provided', () => {
+    const result = planHybridQuery({
+      ...baseHybridInput,
+      fusionMethod: 'linear',
+    })
+
+    const combineIndex = result.arguments.indexOf('COMBINE')
+    expect(result.arguments.slice(combineIndex, combineIndex + 7)).toEqual([
+      'COMBINE',
+      'LINEAR',
+      '4',
+      'ALPHA',
+      '0.5',
+      'BETA',
+      '0.5',
+    ])
+    expect(result.arguments[combineIndex + 7]).not.toBe('YIELD_SCORE_AS')
   })
 
   it('builds KNN with EF_RUNTIME using the nargs convention', () => {
@@ -743,13 +780,15 @@ describe('planHybridQuery', () => {
     })
 
     const knnIndex = result.arguments.indexOf('KNN')
-    expect(result.arguments.slice(knnIndex, knnIndex + 8)).toEqual([
+    expect(result.arguments.slice(knnIndex, knnIndex + 6)).toEqual([
       'KNN',
       '4',
       'K',
       '50',
       'EF_RUNTIME',
       '200',
+    ])
+    expect(result.arguments.slice(knnIndex + 6, knnIndex + 8)).toEqual([
       'YIELD_SCORE_AS',
       'vector_score',
     ])
@@ -759,11 +798,13 @@ describe('planHybridQuery', () => {
     const result = planHybridQuery(baseHybridInput)
 
     const knnIndex = result.arguments.indexOf('KNN')
-    expect(result.arguments.slice(knnIndex, knnIndex + 6)).toEqual([
+    expect(result.arguments.slice(knnIndex, knnIndex + 4)).toEqual([
       'KNN',
       '2',
       'K',
       '50',
+    ])
+    expect(result.arguments.slice(knnIndex + 4, knnIndex + 6)).toEqual([
       'YIELD_SCORE_AS',
       'vector_score',
     ])
@@ -777,11 +818,13 @@ describe('planHybridQuery', () => {
     })
 
     const rangeIndex = result.arguments.indexOf('RANGE')
-    expect(result.arguments.slice(rangeIndex, rangeIndex + 6)).toEqual([
+    expect(result.arguments.slice(rangeIndex, rangeIndex + 4)).toEqual([
       'RANGE',
       '2',
       'RADIUS',
       '0.5',
+    ])
+    expect(result.arguments.slice(rangeIndex + 4, rangeIndex + 6)).toEqual([
       'YIELD_SCORE_AS',
       'vector_score',
     ])
@@ -796,13 +839,15 @@ describe('planHybridQuery', () => {
     })
 
     const rangeIndex = result.arguments.indexOf('RANGE')
-    expect(result.arguments.slice(rangeIndex, rangeIndex + 8)).toEqual([
+    expect(result.arguments.slice(rangeIndex, rangeIndex + 6)).toEqual([
       'RANGE',
       '4',
       'RADIUS',
       '0.5',
       'EPSILON',
       '0.01',
+    ])
+    expect(result.arguments.slice(rangeIndex + 6, rangeIndex + 8)).toEqual([
       'YIELD_SCORE_AS',
       'vector_score',
     ])
@@ -841,14 +886,14 @@ describe('planHybridQuery', () => {
     expect(result.arguments[paramsIndex + 3]).toBe(baseHybridInput.vector)
   })
 
-  it('sorts by the yielded hybrid score using the FT.HYBRID nargs convention', () => {
+  it('sorts by the loaded Redis combined score using the FT.HYBRID nargs convention', () => {
     const result = planHybridQuery(baseHybridInput)
 
     const sortIndex = result.arguments.indexOf('SORTBY')
     expect(result.arguments.slice(sortIndex, sortIndex + 4)).toEqual([
       'SORTBY',
       '2',
-      'hybrid_score',
+      '@__combined_score',
       'ASC',
     ])
   })
@@ -975,9 +1020,9 @@ describe('parseHybridResponse', () => {
     const reply = [
       2,
       'doc:1',
-      ['text_score', '0.5', 'vector_score', '0.3', 'hybrid_score', '0.8'],
+      ['text_score', '0.5', 'vector_score', '0.3', '__combined_score', '0.8'],
       'doc:2',
-      ['text_score', '0.4', 'vector_score', '0.6', 'hybrid_score', '0.7'],
+      ['text_score', '0.4', 'vector_score', '0.6', '__combined_score', '0.7'],
     ]
     const result = parseHybridResponse(reply)
 
@@ -997,7 +1042,7 @@ describe('parseHybridResponse', () => {
           extra_attributes: {
             text_score: '0.5',
             vector_score: '0.3',
-            hybrid_score: '0.8',
+            __combined_score: '0.8',
           },
         },
       ],
@@ -1019,7 +1064,7 @@ describe('parseHybridResponse', () => {
           extra_attributes: {
             text_score: '0.5',
             vector_score: '0.3',
-            hybrid_score: '0.8',
+            __combined_score: '0.8',
             title: 'Wireless Headphones',
             category: 'electronics',
           },

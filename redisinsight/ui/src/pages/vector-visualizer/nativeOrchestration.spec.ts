@@ -965,19 +965,37 @@ describe('native Vector Visualizer query orchestration', () => {
       const combineCount = Number(plan.arguments[combineIndex + 2])
       expect(
         plan.arguments.slice(combineIndex + 3, combineIndex + 3 + combineCount),
-      ).toEqual(['YIELD_SCORE_AS', 'hybrid_score'])
+      ).toEqual(['CONSTANT', '60', 'WINDOW', '20'])
+      expect(plan.arguments[combineIndex + 3 + combineCount]).not.toBe(
+        'YIELD_SCORE_AS',
+      )
       const sortIndex = plan.arguments.indexOf('SORTBY')
       expect(plan.arguments.slice(sortIndex, sortIndex + 4)).toEqual([
         'SORTBY',
         '2',
-        'hybrid_score',
+        '@__combined_score',
         'ASC',
+      ])
+      const loadIndex = plan.arguments.indexOf('LOAD')
+      expect(plan.arguments.slice(loadIndex, loadIndex + 5)).toEqual([
+        'LOAD',
+        '3',
+        '@text_score',
+        '@vector_score',
+        '@__combined_score',
       ])
       return [
         [
           1,
           'doc:anchor',
-          ['text_score', '0.5', 'vector_score', '0.1', 'hybrid_score', '0.6'],
+          [
+            'text_score',
+            '0.5',
+            'vector_score',
+            '0.1',
+            '__combined_score',
+            '0.6',
+          ],
         ],
         ['Total profile time', '1', 'Iterators profile', ['Type', 'HYBRID']],
       ]

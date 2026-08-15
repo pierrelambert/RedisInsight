@@ -757,9 +757,17 @@ const profileEntries = (value: unknown): Array<[string, unknown]> => {
 export const parseSearchProfile = (reply: unknown) => {
   const replyRecord = toRecord(reply)
   const keyedProfile = recordValue(replyRecord, 'Profile')
+  const envelopeExecutionTime = recordValue(replyRecord, 'execution_time')
+  const envelopeProfile =
+    Array.isArray(reply) && reply.length % 2 === 1
+      ? reply[reply.length - 1]
+      : undefined
   const rawProfile =
     keyedProfile ??
-    (Array.isArray(reply) && reply.length === 2 ? reply[1] : undefined)
+    (Array.isArray(reply) && reply.length === 2 ? reply[1] : undefined) ??
+    (envelopeExecutionTime !== undefined
+      ? ['Execution time', envelopeExecutionTime, 'Profile', envelopeProfile]
+      : undefined)
   const facts = profileRecord(rawProfile)
   const stages: Record<string, unknown>[] = []
   const stageSignatures = new Set<string>()
@@ -918,12 +926,19 @@ export const parseAggregateResponse = (reply: unknown): AggregateResult => {
 
 const HYBRID_TEXT_SCORE_FIELD = 'text_score'
 const HYBRID_VECTOR_SCORE_FIELD = 'vector_score'
-const HYBRID_SCORE_FIELD = 'hybrid_score'
+const HYBRID_SCORE_FIELD = '__combined_score'
+const DEFAULT_RRF_CONSTANT = 60
+const DEFAULT_RRF_WINDOW = 20
+const DEFAULT_LINEAR_ALPHA = 0.5
+const DEFAULT_LINEAR_BETA = 0.5
 const HYBRID_SCORE_FIELDS = [
   HYBRID_TEXT_SCORE_FIELD,
   HYBRID_VECTOR_SCORE_FIELD,
   HYBRID_SCORE_FIELD,
 ]
+
+const asHybridFieldReference = (field: string): string =>
+  field.startsWith('@') || field.startsWith('$') ? field : `@${field}`
 
 export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
   const args: RedisArgument[] = [input.index]
@@ -957,20 +972,20 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
 
   // COMBINE clause
   if (input.fusionMethod === 'rrf') {
-    const rrfArgs: string[] = []
-    if (input.rrfConstant !== undefined)
-      rrfArgs.push('CONSTANT', String(input.rrfConstant))
-    if (input.rrfWindow !== undefined)
-      rrfArgs.push('WINDOW', String(input.rrfWindow))
-    rrfArgs.push('YIELD_SCORE_AS', HYBRID_SCORE_FIELD)
+    const rrfArgs: string[] = [
+      'CONSTANT',
+      String(input.rrfConstant ?? DEFAULT_RRF_CONSTANT),
+      'WINDOW',
+      String(input.rrfWindow ?? DEFAULT_RRF_WINDOW),
+    ]
     args.push('COMBINE', 'RRF', String(rrfArgs.length), ...rrfArgs)
   } else {
-    const linearArgs: string[] = []
-    if (input.linearAlpha !== undefined)
-      linearArgs.push('ALPHA', String(input.linearAlpha))
-    if (input.linearBeta !== undefined)
-      linearArgs.push('BETA', String(input.linearBeta))
-    linearArgs.push('YIELD_SCORE_AS', HYBRID_SCORE_FIELD)
+    const linearArgs: string[] = [
+      'ALPHA',
+      String(input.linearAlpha ?? DEFAULT_LINEAR_ALPHA),
+      'BETA',
+      String(input.linearBeta ?? DEFAULT_LINEAR_BETA),
+    ]
     args.push('COMBINE', 'LINEAR', String(linearArgs.length), ...linearArgs)
   }
 
@@ -984,10 +999,14 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
       (field) => !HYBRID_SCORE_FIELDS.includes(field.toLowerCase()),
     ),
   ]
-  args.push('LOAD', String(loadFields.length), ...loadFields)
+  args.push(
+    'LOAD',
+    String(loadFields.length),
+    ...loadFields.map(asHybridFieldReference),
+  )
 
   // SORTBY
-  args.push('SORTBY', '2', HYBRID_SCORE_FIELD, 'ASC')
+  args.push('SORTBY', '2', asHybridFieldReference(HYBRID_SCORE_FIELD), 'ASC')
 
   // LIMIT
   args.push('LIMIT', '0', String(input.limit))

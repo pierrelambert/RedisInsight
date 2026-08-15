@@ -996,7 +996,7 @@ describe('VectorVisualizerPage', () => {
               '0.9',
               'vector_score',
               '0.8',
-              'hybrid_score',
+              '__combined_score',
               '0.95',
             ],
           ],

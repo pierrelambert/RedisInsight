@@ -124,6 +124,46 @@ describe('Advanced topology and profile evidence', () => {
     })
   })
 
+  it('accepts FT.PROFILE HYBRID flat envelopes with nested shard and coordinator facts', () => {
+    expect(
+      parseSearchExecutionEvidence([
+        'total_results',
+        12,
+        'results',
+        [],
+        'warnings',
+        [],
+        'execution_time',
+        0.22,
+        [
+          'Shards',
+          [
+            [
+              'VSIM',
+              [
+                'Total profile time',
+                '0.15',
+                'Iterators profile',
+                ['Type', 'VECTOR', 'Number of reading operations', 11],
+              ],
+            ],
+          ],
+          'Coordinator',
+          [
+            'Total profile time',
+            '0.25',
+            'Result processors profile',
+            [['Type', 'Hybrid Merger', 'Results processed', 12]],
+          ],
+        ],
+      ]),
+    ).toEqual({
+      kind: 'ready',
+      facts: { 'Execution time': '0.22' },
+      vectorMode: 'Unavailable',
+    })
+  })
+
   it('keeps an empty normalized Search profile unavailable', () => {
     expect(
       parseSearchExecutionEvidence({
