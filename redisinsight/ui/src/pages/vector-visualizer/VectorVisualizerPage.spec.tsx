@@ -1053,6 +1053,11 @@ describe('VectorVisualizerPage', () => {
   })
 
   it('renders Aggregate and Hybrid results without an empty neighbor evidence shell', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
     const rows = [
       ['doc:1', float32(1, 2), { brand: 'Nord' }],
       ['doc:2', float32(2, 3), { brand: 'Redis' }],
@@ -1170,6 +1175,12 @@ describe('VectorVisualizerPage', () => {
     expect(
       screen.queryByRole('heading', { name: 'Neighbors' }),
     ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy query' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    expect(writeText.mock.calls[0][0]).toContain(
+      serializeNativeArgument('AGGREGATE'),
+    )
+
     expect(commands.some((command) => command.startsWith('FT.PROFILE'))).toBe(
       true,
     )
@@ -1188,6 +1199,15 @@ describe('VectorVisualizerPage', () => {
     expect(
       screen.queryByRole('heading', { name: 'Neighbors' }),
     ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy query' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2))
+    expect(writeText.mock.calls[1][0]).toContain(
+      serializeNativeArgument('HYBRID'),
+    )
+    expect(writeText.mock.calls[1][0]).toContain(
+      serializeNativeArgument('Nord'),
+    )
+
     expect(commands.some((command) => command.startsWith('FT.PROFILE'))).toBe(
       true,
     )

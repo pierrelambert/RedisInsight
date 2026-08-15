@@ -106,6 +106,7 @@ import {
 import {
   createNativeReadOnlyExecutor,
   serializeNativeArgument,
+  serializeNativeCommandPlan,
 } from './nativeExecution'
 import { runNativeVectorSetBenchmark } from './nativeBenchmark'
 import { buildNativeManifestProvenance } from './nativeManifest'
@@ -1133,6 +1134,8 @@ export const VectorVisualizerPage = () => {
   })
   const [query, setQuery] = useState(emptyQuery)
   const [queryAnchorId, setQueryAnchorId] = useState<string>()
+  const [lastExecutedQueryCommand, setLastExecutedQueryCommand] =
+    useState<string>()
   const [neighborLimit, setNeighborLimit] = useState(DEFAULT_NEIGHBOR_LIMIT)
   const neighborLimitRef = useRef(neighborLimit)
   const [queryMode, setQueryMode] = useState<
@@ -1532,6 +1535,7 @@ export const VectorVisualizerPage = () => {
     setHealthEvidence(undefined)
     setQuery(emptyQuery)
     setQueryAnchorId(undefined)
+    setLastExecutedQueryCommand(undefined)
     setHybridResult(undefined)
     setAggregateResult(undefined)
     setStatus('cancelled')
@@ -1555,6 +1559,7 @@ export const VectorVisualizerPage = () => {
     setHealthEvidence(undefined)
     setQuery(emptyQuery)
     setQueryAnchorId(undefined)
+    setLastExecutedQueryCommand(undefined)
     setHybridResult(undefined)
     setAggregateResult(undefined)
     setSensitivityRuns([])
@@ -1701,6 +1706,7 @@ export const VectorVisualizerPage = () => {
     if (!sample || !anchorId || !anchorVector || !connectedInstance.id) {
       setQuery({ ...emptyQuery, status: 'unsupported' })
       setQueryAnchorId(undefined)
+      setLastExecutedQueryCommand(undefined)
       setHybridResult(undefined)
       setAggregateResult(undefined)
       return
@@ -1714,6 +1720,10 @@ export const VectorVisualizerPage = () => {
         cliClientUuid: cliSettings.cliClientUuid,
         post: apiService.post,
       })
+      const executeAndCaptureQuery: typeof execute = (plan, signal) => {
+        setLastExecutedQueryCommand(serializeNativeCommandPlan(plan))
+        return execute(plan, signal)
+      }
       const result = await orchestrateNativeQuery({
         source,
         anchorId,
@@ -1722,7 +1732,7 @@ export const VectorVisualizerPage = () => {
         metric: sample.result.metric,
         algorithm: sample.result.algorithm,
         limit: redisQueryLimitForVisibleNeighbors(neighborLimit),
-        execute,
+        execute: executeAndCaptureQuery,
         signal: work.signal,
         generation: work.generation,
         accept: (generation) => session.accept(generation, null),
@@ -2977,7 +2987,9 @@ export const VectorVisualizerPage = () => {
       redisQueryLimitForVisibleNeighbors(neighborLimit),
       sampledFilterExpression || undefined,
     )
-    void navigator.clipboard?.writeText(command).catch(() => undefined)
+    void navigator.clipboard
+      ?.writeText(lastExecutedQueryCommand ?? command)
+      .catch(() => undefined)
   }
   const visualizationActions = [
     {
