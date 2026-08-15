@@ -927,6 +927,7 @@ export const parseAggregateResponse = (reply: unknown): AggregateResult => {
 const HYBRID_TEXT_SCORE_FIELD = 'text_score'
 const HYBRID_VECTOR_SCORE_FIELD = 'vector_score'
 const HYBRID_SCORE_FIELD = '__combined_score'
+const HYBRID_KEY_FIELD = '__key'
 const DEFAULT_RRF_CONSTANT = 60
 const DEFAULT_RRF_WINDOW = 20
 const DEFAULT_LINEAR_ALPHA = 0.5
@@ -939,6 +940,9 @@ const HYBRID_SCORE_FIELDS = [
 
 const asHybridFieldReference = (field: string): string =>
   field.startsWith('@') || field.startsWith('$') ? field : `@${field}`
+
+const normalizeHybridLoadField = (field: string): string =>
+  field.replace(/^[@$]/, '').toLowerCase()
 
 export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
   const args: RedisArgument[] = [input.index]
@@ -992,11 +996,16 @@ export const planHybridQuery = (input: HybridQueryInput): CommandPlan => {
   // FILTER
   if (input.filter) args.push('FILTER', input.filter)
 
-  // LOAD the score aliases explicitly; they are required by the evidence chart.
+  // LOAD the reserved key plus score aliases explicitly; HYBRID result rows do
+  // not include document IDs unless @__key is requested.
   const loadFields = [
+    HYBRID_KEY_FIELD,
     ...HYBRID_SCORE_FIELDS,
     ...(input.loadFields ?? []).filter(
-      (field) => !HYBRID_SCORE_FIELDS.includes(field.toLowerCase()),
+      (field) =>
+        ![HYBRID_KEY_FIELD, ...HYBRID_SCORE_FIELDS].includes(
+          normalizeHybridLoadField(field),
+        ),
     ),
   ]
   args.push(
@@ -1037,7 +1046,12 @@ const extractHybridFields = (
 ): Record<string, string> | undefined => {
   const fields: Record<string, string> = {}
   for (const [key, value] of Object.entries(record)) {
-    if (HYBRID_SCORE_FIELDS.includes(key.toLowerCase())) continue
+    const normalizedKey = key.toLowerCase()
+    if (
+      normalizedKey === HYBRID_KEY_FIELD ||
+      HYBRID_SCORE_FIELDS.includes(normalizedKey)
+    )
+      continue
     const text = asText(value)
     if (text !== undefined) fields[key] = text
   }
@@ -1048,18 +1062,19 @@ const toHybridDocument = (
   id: string | undefined,
   record: Record<string, unknown>,
 ): HybridScoreDocument | undefined => {
+  const documentId = id ?? asText(recordValue(record, HYBRID_KEY_FIELD))
   const textScore = asNumber(recordValue(record, HYBRID_TEXT_SCORE_FIELD))
   const vectorScore = asNumber(recordValue(record, HYBRID_VECTOR_SCORE_FIELD))
   const hybridScore = asNumber(recordValue(record, HYBRID_SCORE_FIELD))
   if (
-    !id ||
+    !documentId ||
     textScore === undefined ||
     vectorScore === undefined ||
     hybridScore === undefined
   )
     return undefined
   return {
-    id,
+    id: documentId,
     textScore,
     vectorScore,
     hybridScore,
@@ -1077,7 +1092,9 @@ export const parseHybridResponse = (reply: unknown): HybridQueryResult => {
     for (const result of results) {
       const row = toRecord(result)
       const attributes = toRecord(
-        recordValue(row, 'extra_attributes') ?? recordValue(row, 'attributes'),
+        recordValue(row, 'extra_attributes') ??
+          recordValue(row, 'attributes') ??
+          row,
       )
       const document = toHybridDocument(
         asText(recordValue(row, 'id')),

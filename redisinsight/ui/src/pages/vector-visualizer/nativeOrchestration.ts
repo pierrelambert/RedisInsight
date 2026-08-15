@@ -643,8 +643,26 @@ const normalizeProfile = (
 const isSearchResultsReply = (reply: unknown): reply is unknown[] =>
   Array.isArray(reply) && asNumber(reply[0]) !== undefined
 
+const hasHybridResultsEnvelope = (reply: unknown): boolean => {
+  const results = recordValue(toRecord(reply), 'results')
+  if (!Array.isArray(results) || !results.length) return false
+  const firstRow = toRecord(results[0])
+  const attributes = toRecord(
+    recordValue(firstRow, 'extra_attributes') ??
+      recordValue(firstRow, 'attributes') ??
+      firstRow,
+  )
+  return (
+    recordValue(attributes, '__key') !== undefined ||
+    recordValue(attributes, 'text_score') !== undefined ||
+    recordValue(attributes, 'vector_score') !== undefined ||
+    recordValue(attributes, '__combined_score') !== undefined
+  )
+}
+
 const searchResultsFromProfileReply = (reply: unknown): unknown => {
   if (isSearchResultsReply(reply)) return reply
+  if (hasHybridResultsEnvelope(reply)) return reply
   if (!Array.isArray(reply)) return reply
   return reply.find(isSearchResultsReply) ?? reply[0]
 }

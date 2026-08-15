@@ -977,18 +977,22 @@ describe('native Vector Visualizer query orchestration', () => {
         'ASC',
       ])
       const loadIndex = plan.arguments.indexOf('LOAD')
-      expect(plan.arguments.slice(loadIndex, loadIndex + 5)).toEqual([
+      expect(plan.arguments.slice(loadIndex, loadIndex + 6)).toEqual([
         'LOAD',
-        '3',
+        '4',
+        '@__key',
         '@text_score',
         '@vector_score',
         '@__combined_score',
       ])
       return [
+        'total_results',
+        1,
+        'results',
         [
-          1,
-          'doc:anchor',
           [
+            '__key',
+            'doc:anchor',
             'text_score',
             '0.5',
             'vector_score',
@@ -997,6 +1001,10 @@ describe('native Vector Visualizer query orchestration', () => {
             '0.6',
           ],
         ],
+        'warnings',
+        [],
+        'execution_time',
+        '1.2',
         ['Total profile time', '1', 'Iterators profile', ['Type', 'HYBRID']],
       ]
     })

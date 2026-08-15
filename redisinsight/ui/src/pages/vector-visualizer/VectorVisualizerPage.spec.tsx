@@ -988,10 +988,13 @@ describe('VectorVisualizerPage', () => {
         ]
       } else if (command.includes(serializeNativeArgument('HYBRID'))) {
         response = [
+          'total_results',
+          1,
+          'results',
           [
-            1,
-            'doc:1',
             [
+              '__key',
+              'doc:1',
               'text_score',
               '0.9',
               'vector_score',
@@ -1000,6 +1003,10 @@ describe('VectorVisualizerPage', () => {
               '0.95',
             ],
           ],
+          'warnings',
+          [],
+          'execution_time',
+          '1.1',
           ['Total profile time', '1.1'],
         ]
       } else {

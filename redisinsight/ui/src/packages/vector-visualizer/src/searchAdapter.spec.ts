@@ -654,7 +654,8 @@ describe('planHybridQuery', () => {
         '$vv_anchor',
         'KNN',
         'LOAD',
-        '3',
+        '4',
+        '@__key',
         '@text_score',
         '@vector_score',
         '@__combined_score',
@@ -687,9 +688,10 @@ describe('planHybridQuery', () => {
     })
 
     const loadIndex = result.arguments.indexOf('LOAD')
-    expect(result.arguments.slice(loadIndex, loadIndex + 6)).toEqual([
+    expect(result.arguments.slice(loadIndex, loadIndex + 7)).toEqual([
       'LOAD',
-      '4',
+      '5',
+      '@__key',
       '@text_score',
       '@vector_score',
       '@__combined_score',
@@ -1038,13 +1040,37 @@ describe('parseHybridResponse', () => {
       total_results: 1,
       results: [
         {
-          id: 'doc:1',
           extra_attributes: {
+            __key: 'doc:1',
             text_score: '0.5',
             vector_score: '0.3',
             __combined_score: '0.8',
           },
         },
+      ],
+    }
+    const result = parseHybridResponse(reply)
+
+    expect(result.totalResults).toBe(1)
+    expect(result.documents).toEqual([
+      { id: 'doc:1', textScore: 0.5, vectorScore: 0.3, hybridScore: 0.8 },
+    ])
+  })
+
+  it('extracts flat FT.PROFILE HYBRID rows loaded with Redis reserved __key', () => {
+    const reply = {
+      total_results: 1,
+      results: [
+        [
+          '__key',
+          'doc:1',
+          'text_score',
+          '0.5',
+          'vector_score',
+          '0.3',
+          '__combined_score',
+          '0.8',
+        ],
       ],
     }
     const result = parseHybridResponse(reply)
@@ -1065,6 +1091,7 @@ describe('parseHybridResponse', () => {
             text_score: '0.5',
             vector_score: '0.3',
             __combined_score: '0.8',
+            __key: 'doc:1',
             title: 'Wireless Headphones',
             category: 'electronics',
           },
