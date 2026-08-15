@@ -870,12 +870,19 @@ describe('VectorVisualizerPage', () => {
       screen.getByRole('button', { name: /Cluster \d+ · brand-/ }),
     ).toBeVisible()
     fireEvent.click(screen.getByTestId('vector-visualizer-selected-row-doc:1'))
-    fireEvent.click(screen.getByRole('button', { name: 'Copy query' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy query template' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     const copiedQuery = writeText.mock.calls[0][0] as string
+    expect(copiedQuery).toContain(
+      'RedisInsight Vector Visualizer query template',
+    )
+    expect(copiedQuery).toContain('Anchor document: doc:1')
+    expect(copiedQuery).toContain('Anchor vector field: embedding')
+    expect(copiedQuery).toContain('Workbench cannot paste')
     expect(copiedQuery).toContain('KNN 11')
     expect(copiedQuery).not.toContain('KNN 50')
-    expect(copiedQuery).toContain('"<selected-vector-binary-blob>"')
+    expect(copiedQuery).toContain('<raw-binary-vector-blob>')
+    expect(copiedQuery).not.toContain('"<raw-binary-vector-blob>"')
     expect(copiedQuery).not.toContain('\\x')
     fireEvent.change(screen.getByLabelText('Filter sampled documents'), {
       target: { value: '@type:bike' },

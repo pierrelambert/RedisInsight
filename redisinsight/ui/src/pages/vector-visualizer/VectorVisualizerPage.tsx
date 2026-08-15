@@ -175,12 +175,13 @@ const aggregateMetricLabels = (metric: VectorMetric | 'unknown') => {
 
 const buildCopyableQuery = (
   source: VectorDataSourceRef,
+  selectedId: string,
   limit: number,
   filter?: string,
 ): string => {
   if (source.kind === 'search-index') {
     const query = `${filter ? `(${filter})` : '*'}=>[KNN ${limit} @${source.vectorField} $vv_anchor AS __vv_metric]`
-    return [
+    const command = [
       'FT.PROFILE',
       quoteCliToken(source.index),
       'SEARCH',
@@ -190,7 +191,7 @@ const buildCopyableQuery = (
       'PARAMS',
       '2',
       'vv_anchor',
-      quoteCliToken('<selected-vector-binary-blob>'),
+      '<raw-binary-vector-blob>',
       'SORTBY',
       '__vv_metric',
       'ASC',
@@ -200,9 +201,18 @@ const buildCopyableQuery = (
       'DIALECT',
       '2',
     ].join(' ')
+
+    return [
+      'RedisInsight Vector Visualizer query template',
+      `Anchor document: ${selectedId}`,
+      `Anchor vector field: ${source.vectorField}`,
+      'Workbench cannot paste or synthesize the raw binary vector blob used by PARAMS.',
+      'Run the query from Vector Visualizer, or replace <raw-binary-vector-blob> with the exact binary value from Redis before executing.',
+      command,
+    ].join('\n')
   }
 
-  return [
+  const command = [
     'VSIM',
     quoteCliToken(new TextDecoder().decode(source.key)),
     'VALUES',
@@ -212,6 +222,13 @@ const buildCopyableQuery = (
     String(limit),
     'WITHSCORES',
   ].join(' ')
+
+  return [
+    'RedisInsight Vector Visualizer query template',
+    `Anchor member: ${selectedId}`,
+    'Replace <dimensions> and <selected vector values> with the exact vector values before executing in Workbench.',
+    command,
+  ].join('\n')
 }
 
 const DEFAULT_SAMPLE_BUDGET = 2_000
@@ -2892,6 +2909,7 @@ export const VectorVisualizerPage = () => {
     if (!vector) return
     const command = buildCopyableQuery(
       source,
+      selectedId,
       redisQueryLimitForVisibleNeighbors(neighborLimit),
       sampledFilterExpression || undefined,
     )
