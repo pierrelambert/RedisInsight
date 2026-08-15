@@ -322,18 +322,33 @@ const NativeHost = styled.main`
   gap: ${({ theme }) => theme.core.space.space100};
 ` as unknown as React.FC<React.HTMLAttributes<HTMLElement>>
 
-const NativeHeader = styled(Row)`
+const NativeHeader = styled(Col)`
   flex: 0 0 auto;
   min-inline-size: 0;
 `
 
-const HeaderTitleLine = styled(Row)`
+const HeaderTitleLine = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: ${({ theme }) => theme.core.space.space150};
+  inline-size: 100%;
   min-inline-size: 0;
 `
 
-const HeaderRightAction = styled(Row)`
-  flex: 0 0 auto;
-  margin-left: auto;
+const HeaderBreadcrumbSlot = styled.div`
+  min-inline-size: 0;
+  overflow: hidden;
+`
+
+const HeaderTitleSlot = styled.div`
+  min-inline-size: 0;
+  justify-self: center;
+`
+
+const HeaderActionSlot = styled.div`
+  min-inline-size: 0;
+  justify-self: end;
 `
 
 const BreadcrumbLink = styled.button`
@@ -3139,15 +3154,9 @@ export const VectorVisualizerPage = () => {
 
   return (
     <NativeHost data-testid="vector-visualizer-native-host">
-      <NativeHeader
-        align="center"
-        data-testid="vector-visualizer-native-header"
-        gap="m"
-        justify="between"
-        wrap
-      >
-        <Col gap="xs">
-          <HeaderTitleLine align="center" gap="s" wrap>
+      <NativeHeader data-testid="vector-visualizer-native-header" gap="xs">
+        <HeaderTitleLine data-testid="vector-visualizer-header-title-line">
+          <HeaderBreadcrumbSlot>
             {source.kind === 'search-index' && (
               <Breadcrumbs.Compose
                 aria-label={t('vectorSearch.query.breadcrumb.ariaLabel')}
@@ -3179,48 +3188,50 @@ export const VectorVisualizerPage = () => {
                 </Breadcrumbs.List>
               </Breadcrumbs.Compose>
             )}
+          </HeaderBreadcrumbSlot>
+          <HeaderTitleSlot>
             <Title component="h1" size="M">
               {t('vectorVisualizer.page.title')}
             </Title>
-          </HeaderTitleLine>
-          <Row
-            align="center"
-            data-testid="vector-visualizer-page-context"
-            gap="s"
-            wrap
-          >
-            <Text component="span" size="S">
-              {source.kind === 'search-index'
-                ? t('vectorVisualizer.page.searchSourceReady', {
-                    index: source.index,
-                    vectorField: source.vectorField,
-                  })
-                : t('vectorVisualizer.page.vectorSetSourceReady')}
-            </Text>
-            <Text color="subdued" component="span" size="S">
-              {sampleFreshnessLabel}
-            </Text>
-            <Text aria-live="polite" component="span" role="status" size="S">
-              {statusCopy[status]}
-            </Text>
-            <Text component="span" size="S">
-              {t('vectorVisualizer.page.selectedCount', {
-                count: selectedIds.length,
-              })}
-            </Text>
-            <Text color="subdued" component="span" size="S">
-              {t('vectorVisualizer.page.noCommandOnOpen')}
-            </Text>
-          </Row>
-        </Col>
-        {source.kind === 'search-index' && (
-          <HeaderRightAction align="center">
-            <ViewIndexButton
-              isActive={isIndexPanelOpen}
-              onClick={() => setIsIndexPanelOpen((open) => !open)}
-            />
-          </HeaderRightAction>
-        )}
+          </HeaderTitleSlot>
+          <HeaderActionSlot>
+            {source.kind === 'search-index' && (
+              <ViewIndexButton
+                isActive={isIndexPanelOpen}
+                onClick={() => setIsIndexPanelOpen((open) => !open)}
+              />
+            )}
+          </HeaderActionSlot>
+        </HeaderTitleLine>
+        <Row
+          align="center"
+          data-testid="vector-visualizer-page-context"
+          gap="s"
+          wrap
+        >
+          <Text component="span" size="S">
+            {source.kind === 'search-index'
+              ? t('vectorVisualizer.page.searchSourceReady', {
+                  index: source.index,
+                  vectorField: source.vectorField,
+                })
+              : t('vectorVisualizer.page.vectorSetSourceReady')}
+          </Text>
+          <Text color="subdued" component="span" size="S">
+            {sampleFreshnessLabel}
+          </Text>
+          <Text aria-live="polite" component="span" role="status" size="S">
+            {statusCopy[status]}
+          </Text>
+          <Text component="span" size="S">
+            {t('vectorVisualizer.page.selectedCount', {
+              count: selectedIds.length,
+            })}
+          </Text>
+          <Text color="subdued" component="span" size="S">
+            {t('vectorVisualizer.page.noCommandOnOpen')}
+          </Text>
+        </Row>
       </NativeHeader>
       <ModeHeader
         align="center"

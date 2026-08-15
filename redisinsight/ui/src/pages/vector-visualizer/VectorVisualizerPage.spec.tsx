@@ -282,6 +282,15 @@ describe('VectorVisualizerPage', () => {
     expect(
       screen.getByTestId('vector-visualizer-native-header'),
     ).toHaveTextContent('Indexes/idx:bikes_vssVector Visualizer')
+
+    const titleLine = screen.getByTestId('vector-visualizer-header-title-line')
+    expect(titleLine).toContainElement(
+      screen.getByTestId('vector-visualizer-breadcrumb-search-indexes'),
+    )
+    expect(titleLine).toContainElement(
+      screen.getByRole('heading', { name: 'Vector Visualizer' }),
+    )
+    expect(titleLine).toContainElement(screen.getByTestId('view-index-btn'))
   })
 
   it('preserves the one-shot source when the page is mounted through a lazy route', async () => {
