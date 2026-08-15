@@ -10,6 +10,7 @@ import { useHistory, useLocation, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { Button } from 'uiSrc/components/base/forms/buttons'
+import { ButtonGroup } from 'uiSrc/components/base/forms/button-group/ButtonGroup'
 import { RiIcon } from 'uiSrc/components/base/icons'
 import { Col, Row } from 'uiSrc/components/base/layout/flex'
 import { Breadcrumbs } from 'uiSrc/components/base/navigation/breadcrumbs'
@@ -2997,6 +2998,23 @@ export const VectorVisualizerPage = () => {
   }
   const visualizationActions = [
     {
+      id: 'sample-vectors',
+      label: t('vectorVisualizer.actions.sampleVectors'),
+      disabled:
+        !cliSettings.cliClientUuid ||
+        cliSettings.loading ||
+        status === 'fetching' ||
+        status === 'layouting',
+      variant: 'primary' as const,
+      onClick: () => void sampleVectors(),
+    },
+    {
+      id: 'cancel-sampling',
+      label: t('vectorVisualizer.actions.cancel'),
+      disabled: status !== 'fetching' && status !== 'layouting',
+      onClick: cancel,
+    },
+    {
       id: 'run-neighbors',
       label: t('vectorVisualizer.actions.runNeighborsForSelected'),
       disabled: selectedIds.length !== 1 || !sample,
@@ -3031,17 +3049,18 @@ export const VectorVisualizerPage = () => {
           gap="s"
           wrap
         >
-          {workflows.slice(1).map((id) => (
-            <Button
-              aria-pressed={workflow === id}
-              key={id}
-              size="s"
-              variant={workflow === id ? 'primary' : 'secondary-ghost'}
-              onClick={() => selectWorkflow(id)}
-            >
-              {workflowLabels[id]}
-            </Button>
-          ))}
+          <ButtonGroup>
+            {workflows.slice(1).map((id) => (
+              <ButtonGroup.Button
+                aria-pressed={workflow === id}
+                isSelected={workflow === id}
+                key={id}
+                onClick={() => selectWorkflow(id)}
+              >
+                {workflowLabels[id]}
+              </ButtonGroup.Button>
+            ))}
+          </ButtonGroup>
         </Row>
         {workflow !== 'explore' && content}
       </AdditionalWorkflowBody>
@@ -3189,30 +3208,11 @@ export const VectorVisualizerPage = () => {
                 count: selectedIds.length,
               })}
             </Text>
+            <Text color="subdued" component="span" size="S">
+              {t('vectorVisualizer.page.noCommandOnOpen')}
+            </Text>
           </Row>
         </Col>
-        <Row align="center" gap="s" wrap>
-          <Button
-            disabled={
-              !cliSettings.cliClientUuid ||
-              cliSettings.loading ||
-              status === 'fetching' ||
-              status === 'layouting'
-            }
-            onClick={() => void sampleVectors()}
-          >
-            {t('vectorVisualizer.actions.sampleVectors')}
-          </Button>
-          <Button
-            disabled={status !== 'fetching' && status !== 'layouting'}
-            onClick={cancel}
-          >
-            {t('vectorVisualizer.actions.cancel')}
-          </Button>
-          <Text color="subdued" size="S">
-            {t('vectorVisualizer.page.noCommandOnOpen')}
-          </Text>
-        </Row>
         {source.kind === 'search-index' && (
           <HeaderRightAction align="center">
             <ViewIndexButton

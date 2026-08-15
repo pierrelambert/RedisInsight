@@ -25,7 +25,7 @@ export const EvidencePanel = styled.section`
 
 export const MetricGrid = styled.div`
   display: flex;
-  gap: ${({ theme }) => theme.core.space.space075};
+  gap: ${({ theme }) => theme.core.space.space150};
   min-inline-size: 0;
   overflow-x: auto;
   overflow-y: hidden;

@@ -355,6 +355,9 @@ describe('VectorVisualizerPage', () => {
       'true',
     )
     expect(screen.getByRole('button', { name: 'Sample vectors' })).toBeEnabled()
+    expect(
+      screen.getByTestId('vector-visualizer-mode-header'),
+    ).toContainElement(screen.getByRole('button', { name: 'Sample vectors' }))
     expect(screen.getByLabelText(/Sample budget/)).toHaveValue('2000')
     expect(screen.getByLabelText('Projection')).toHaveTextContent('UMAP')
     expect(screen.getByLabelText('Compare UMAP and PCA')).toBeDisabled()
@@ -371,6 +374,10 @@ describe('VectorVisualizerPage', () => {
     ).not.toBeInTheDocument()
     openAdditionalWorkflow('Health')
 
+    expect(screen.getByRole('button', { name: 'Health' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     expect(screen.getByRole('heading', { name: 'X-ray summary' })).toBeVisible()
     expect(screen.getAllByText('Unknown candidate evidence')).not.toHaveLength(
       0,

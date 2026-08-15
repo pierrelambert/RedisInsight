@@ -28,6 +28,7 @@ export interface VectorVisualizerCanvasUtilityAction {
   id: string
   label: string
   disabled?: boolean
+  variant?: 'primary' | 'secondary-ghost'
   onClick(): void
 }
 

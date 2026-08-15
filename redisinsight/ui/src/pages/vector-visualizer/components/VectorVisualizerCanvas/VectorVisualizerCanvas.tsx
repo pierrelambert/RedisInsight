@@ -105,7 +105,7 @@ export const VectorVisualizerModeTabs = ({
               disabled={action.disabled}
               key={action.id}
               size="s"
-              variant="secondary-ghost"
+              variant={action.variant ?? 'secondary-ghost'}
               onClick={action.onClick}
             >
               {action.label}
