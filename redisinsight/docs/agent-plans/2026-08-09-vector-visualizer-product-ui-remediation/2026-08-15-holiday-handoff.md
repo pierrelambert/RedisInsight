@@ -4,12 +4,13 @@ Date: 2026-08-15 19:49 CEST
 Branch: `feature/vector-visualizer`
 Implementation/documentation checkpoint before this preservation note: `f1611797a docs(vector-visualizer): update holiday handoff status`
 Parking target: `fork` remote, `https://github.com/pierrelambert/RedisInsight.git`, branch `feature/vector-visualizer`
+Parking status: pushed to Pierre's fork on 2026-09-03; verify the remote branch is at this preservation note or newer when resuming.
 
 This file is the current resume point. Older reports that say the plan is fully PR-ready are historical; they predate the later live-route review, recovery from `6fe901323`, and the latest Query Lab / evidence-workflow fixes.
 
 ## Current state in one paragraph
 
-The branch contains the original Vector Visualizer implementation, the Aggregate/Hybrid/Profile query pipeline, the recovered visual capabilities from the mixed `6fe901323` commit, the follow-up live-route UX repairs made on 2026-08-15, and this preservation documentation update. The implementation code and previous handoff documentation are committed through `f1611797a`; the branch should next be committed with this preservation note and pushed to Pierre's fork. The implementation is substantial and locally committed, but it is not ready to open as a final PR without one deliberate live RedisInsight route pass, a clean PR gate pass, and the remaining product-readiness decisions listed below.
+The branch contains the original Vector Visualizer implementation, the Aggregate/Hybrid/Profile query pipeline, the recovered visual capabilities from the mixed `6fe901323` commit, the follow-up live-route UX repairs made on 2026-08-15, and this preservation documentation update. The implementation code and previous handoff documentation were committed through `f1611797a`; the branch was then documented as a preservation checkpoint and pushed to Pierre's fork. The implementation is substantial and remotely preserved, but it is not ready to open as a final PR without one deliberate live RedisInsight route pass, a clean PR gate pass, and the remaining product-readiness decisions listed below.
 
 ## Parking branch safely before pause
 
@@ -19,6 +20,7 @@ Goal: preserve all committed Vector Visualizer work while Pierre has no time to 
 - Preservation target: GitHub fork `pierrelambert/RedisInsight`.
 - Remote configured locally: `fork` -> `https://github.com/pierrelambert/RedisInsight.git`.
 - Branch to push: `feature/vector-visualizer`.
+- Status on 2026-09-03: pushed and intended to be the durable remote checkpoint.
 - This is a durability checkpoint only. It does not make the feature PR-ready and does not promote the feature flag.
 - Resume by fetching `pierrelambert/RedisInsight`, checking out `feature/vector-visualizer`, and starting from this handoff plus `00-index.md`.
 - After pushing, verify the fork branch points to this documentation commit or newer before deleting any local checkout, worktree, or stash.

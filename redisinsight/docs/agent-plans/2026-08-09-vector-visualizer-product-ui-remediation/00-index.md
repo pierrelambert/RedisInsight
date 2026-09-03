@@ -4,7 +4,7 @@ Plan state: promoted
 Execution: started by explicit user authorization
 Last updated: 2026-08-15
 Current resume checkpoint before preservation note: `f1611797a docs(vector-visualizer): update holiday handoff status`
-Current preservation step: push `feature/vector-visualizer` to Pierre's fork, `https://github.com/pierrelambert/RedisInsight.git`, as a durable remote checkpoint. This is not PR readiness or feature promotion.
+Current preservation status: `feature/vector-visualizer` was pushed to Pierre's fork, `https://github.com/pierrelambert/RedisInsight.git`, as a durable remote checkpoint. This is not PR readiness or feature promotion.
 
 - [Charter](charter.md)
 - [Overview and dependency graph](00-overview.md)
