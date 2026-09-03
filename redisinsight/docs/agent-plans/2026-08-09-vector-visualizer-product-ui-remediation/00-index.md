@@ -3,7 +3,8 @@
 Plan state: promoted
 Execution: started by explicit user authorization
 Last updated: 2026-08-15
-Current resume checkpoint: `46477e80c fix(vector-visualizer): center header title`
+Current resume checkpoint before preservation note: `f1611797a docs(vector-visualizer): update holiday handoff status`
+Current preservation step: push `feature/vector-visualizer` to Pierre's fork, `https://github.com/pierrelambert/RedisInsight.git`, as a durable remote checkpoint. This is not PR readiness or feature promotion.
 
 - [Charter](charter.md)
 - [Overview and dependency graph](00-overview.md)
@@ -37,6 +38,8 @@ The focused feature was considered complete at that point. Stated boundaries wer
 ## Current PR/completion status
 
 The branch is locally committed and useful, but not yet final PR-ready.
+
+Immediate next step if resuming after the pause: verify/fetch the fork branch `pierrelambert/RedisInsight:feature/vector-visualizer`, confirm its HEAD is this preservation checkpoint or newer, then continue with the blocker list below.
 
 Current blockers before PR:
 
